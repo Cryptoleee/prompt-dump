@@ -1,0 +1,26 @@
+{
+  "short_name": "Prompt Dump",
+  "name": "Prompt Dump AI Collector",
+  "icons": [
+    {
+      "src": "https://cdn.lucide.dev/icon-sparkles-48.png",
+      "type": "image/png",
+      "sizes": "48x48"
+    },
+    {
+      "src": "https://cdn.lucide.dev/icon-sparkles-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn.lucide.dev/icon-sparkles-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0a0a0a",
+  "background_color": "#0a0a0a",
+  "orientation": "portrait"
+}
