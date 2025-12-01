@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Link as LinkIcon, Type, Image as ImageIcon, Tag, Hash, Smile } from 'lucide-react';
+import { X, Save, Link as LinkIcon, Type, Image as ImageIcon, Tag, Smile } from 'lucide-react';
 import { Category, PromptEntry } from '../types';
 
 interface AddPromptFormProps {
