@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Link as LinkIcon, Type, Image as ImageIcon, Tag, Smile } from 'lucide-react';
+import { X, Save, Link as LinkIcon, Type, Image as ImageIcon, Tag, Smile, Upload, Loader2 } from 'lucide-react';
 import { Category, PromptEntry } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 
 interface AddPromptFormProps {
   isOpen: boolean;
@@ -30,6 +32,7 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
   const [tagsInput, setTagsInput] = useState('');
   
   const [error, setError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -49,6 +52,7 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
         setTagsInput('');
       }
       setError('');
+      setIsUploading(false);
     }
   }, [isOpen, initialData]);
 
@@ -71,6 +75,44 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
     });
     
     onClose();
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        setError('Please upload an image file');
+        return;
+    }
+
+    // Validate size (e.g. 5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+        setError('Image must be smaller than 5MB');
+        return;
+    }
+
+    try {
+        setIsUploading(true);
+        setError('');
+        
+        // Create a unique reference
+        const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+        const storageRef = ref(storage, `uploads/${fileName}`);
+        
+        // Upload
+        await uploadBytes(storageRef, file);
+        
+        // Get URL
+        const url = await getDownloadURL(storageRef);
+        setImageUrl(url);
+    } catch (err: any) {
+        console.error("Upload failed", err);
+        setError('Failed to upload image. Please try again.');
+    } finally {
+        setIsUploading(false);
+    }
   };
 
   const isEditMode = !!initialData;
@@ -128,17 +170,40 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
 
                 <div className="space-y-2">
                     <label className="block text-sm font-semibold text-gray-400 ml-1">Image URL</label>
-                    <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <ImageIcon className="h-4 w-4 text-gray-500" />
+                    <div className="flex gap-2">
+                        <div className="relative group flex-grow">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <ImageIcon className="h-4 w-4 text-gray-500" />
+                            </div>
+                            <input
+                                type="url"
+                                value={imageUrl}
+                                onChange={(e) => setImageUrl(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent transition-all"
+                                placeholder="https://..."
+                            />
                         </div>
-                        <input
-                            type="url"
-                            value={imageUrl}
-                            onChange={(e) => setImageUrl(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent transition-all"
-                            placeholder="https://..."
+                        
+                        <input 
+                            type="file" 
+                            id="imageUpload" 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={handleImageUpload}
                         />
+                        <button
+                            type="button"
+                            onClick={() => document.getElementById('imageUpload')?.click()}
+                            disabled={isUploading}
+                            className="px-4 bg-dark-bg border border-dark-border rounded-2xl hover:border-brand-accent transition-colors flex items-center justify-center min-w-[3rem]"
+                            title="Upload Image"
+                        >
+                            {isUploading ? (
+                                <Loader2 className="w-5 h-5 text-brand-accent animate-spin" />
+                            ) : (
+                                <Upload className="w-5 h-5 text-gray-400 hover:text-white" />
+                            )}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -225,7 +290,8 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
               </button>
               <button
                 type="submit"
-                className="flex-[2] flex items-center justify-center gap-2 px-6 py-4 bg-white text-dark-bg font-bold rounded-2xl hover:bg-brand-accent hover:text-white transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-[0.98]"
+                disabled={isUploading}
+                className="flex-[2] flex items-center justify-center gap-2 px-6 py-4 bg-white text-dark-bg font-bold rounded-2xl hover:bg-brand-accent hover:text-white transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isEditMode ? 'Update Dump' : 'Dump It'}
               </button>
