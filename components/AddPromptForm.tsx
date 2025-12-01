@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wand2, Link as LinkIcon, Type, Loader2, Image as ImageIcon, Sparkles, Save } from 'lucide-react';
-import { analyzePrompt, extractTweetInfo } from '../services/geminiService';
+import { X, Save, Link as LinkIcon, Type, Image as ImageIcon, Tag, Hash, Smile } from 'lucide-react';
 import { Category, PromptEntry } from '../types';
 
 interface AddPromptFormProps {
@@ -24,21 +23,30 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
   const [text, setText] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false);
+  
+  // Manual Metadata State
+  const [selectedCategory, setSelectedCategory] = useState<Category>(Category.PHOTOREALISTIC);
+  const [mood, setMood] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
+  
   const [error, setError] = useState('');
 
-  // Reset or Populate form when modal opens
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
         setText(initialData.text);
         setSourceUrl(initialData.sourceUrl);
         setImageUrl(initialData.imageUrl || '');
+        setSelectedCategory(initialData.category);
+        setMood(initialData.mood || '');
+        setTagsInput(initialData.tags.join(', '));
       } else {
         setText('');
         setSourceUrl('');
         setImageUrl('');
+        setSelectedCategory(Category.PHOTOREALISTIC);
+        setMood('');
+        setTagsInput('');
       }
       setError('');
     }
@@ -46,59 +54,23 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
 
   if (!isOpen) return null;
 
-  const handleAutoFill = async () => {
-    if (!sourceUrl) {
-      setError('Paste a link first to use Auto-Fill');
-      return;
-    }
-    
-    setIsExtracting(true);
-    setError('');
-    
-    try {
-      const info = await extractTweetInfo(sourceUrl);
-      
-      if (info.imageUrl) {
-        setImageUrl(info.imageUrl);
-      }
-      
-      if (info.prompt && !text) {
-        setText(info.prompt);
-      } else if (info.prompt && text) {
-        if (text.length < 10) setText(info.prompt);
-      }
-
-      if (!info.imageUrl && !info.prompt) {
-        setError('Could not extract info. Try entering manually.');
-      }
-    } catch (err) {
-      setError('Failed to auto-fill. Please enter manually.');
-    } finally {
-      setIsExtracting(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim()) {
       setError('Please enter a prompt');
       return;
     }
 
-    setIsAnalyzing(true);
-    setError('');
+    // Parse comma separated tags
+    const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
-    try {
-      // Always re-analyze to ensure tags/categories are fresh based on new text
-      const analysis = await analyzePrompt(text);
-      onSubmit(text, sourceUrl, imageUrl, analysis);
-      
-      onClose();
-    } catch (err) {
-      setError('Something went wrong. Try again.');
-    } finally {
-      setIsAnalyzing(false);
-    }
+    onSubmit(text, sourceUrl, imageUrl, {
+      tags,
+      category: selectedCategory,
+      mood: mood || 'Neutral'
+    });
+    
+    onClose();
   };
 
   const isEditMode = !!initialData;
@@ -110,19 +82,19 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
         onClick={onClose}
       />
       
-      <div className="relative w-full max-w-2xl bg-dark-card border border-dark-border rounded-3xl shadow-2xl overflow-hidden scale-100 animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-2xl bg-dark-card border border-dark-border rounded-3xl shadow-2xl overflow-hidden scale-100 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
         <div className="p-8">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
               <div className="bg-brand-accent/20 p-3 rounded-2xl border border-brand-accent/20">
-                 {isEditMode ? <Save className="w-6 h-6 text-brand-accent" /> : <Wand2 className="w-6 h-6 text-brand-accent" />}
+                 <Save className="w-6 h-6 text-brand-accent" />
               </div>
               <div>
                 <h2 className="text-2xl font-display font-bold text-white">
-                  {isEditMode ? 'Edit Dump' : 'Add New Dump'}
+                  {isEditMode ? 'Edit Dump' : 'Manual Dump'}
                 </h2>
                 <p className="text-gray-400 text-sm">
-                  {isEditMode ? 'Tweaking perfection.' : "Paste your find, we'll organize it."}
+                  {isEditMode ? 'Tweaking perfection.' : "Save it for later."}
                 </p>
               </div>
             </div>
@@ -134,72 +106,107 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* Source & Image */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-2">
-                    <label className="block text-sm font-semibold text-gray-400 ml-1">
-                        Source Link (X/Twitter)
-                    </label>
-                    <div className="relative group flex gap-2">
-                        <div className="relative flex-grow">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <LinkIcon className="h-5 w-5 text-gray-500 group-focus-within:text-brand-accent transition-colors" />
-                            </div>
-                            <input
+                    <label className="block text-sm font-semibold text-gray-400 ml-1">Source Link</label>
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <LinkIcon className="h-4 w-4 text-gray-500" />
+                        </div>
+                        <input
                             type="url"
                             value={sourceUrl}
                             onChange={(e) => setSourceUrl(e.target.value)}
-                            className="block w-full pl-11 pr-4 py-3.5 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent transition-all"
+                            className="block w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent transition-all"
                             placeholder="https://x.com/..."
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleAutoFill}
-                            disabled={!sourceUrl || isExtracting}
-                            className="px-4 py-2 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/20 rounded-2xl text-brand-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[50px]"
-                            title="Auto-fill info from URL"
-                        >
-                            {isExtracting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                        </button>
+                        />
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-400 ml-1">
-                    Image URL (Preview)
-                </label>
-                <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <ImageIcon className="h-5 w-5 text-gray-500 group-focus-within:text-brand-accent transition-colors" />
+                    <label className="block text-sm font-semibold text-gray-400 ml-1">Image URL</label>
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <ImageIcon className="h-4 w-4 text-gray-500" />
+                        </div>
+                        <input
+                            type="url"
+                            value={imageUrl}
+                            onChange={(e) => setImageUrl(e.target.value)}
+                            className="block w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent transition-all"
+                            placeholder="https://..."
+                        />
                     </div>
-                    <input
-                    type="url"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    className="block w-full pl-11 pr-4 py-3.5 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent transition-all"
-                    placeholder="Auto-filled or paste URL"
-                    />
-                </div>
                 </div>
             </div>
 
+            {/* Prompt Text */}
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-400 ml-1">
-                Prompt
-              </label>
+              <label className="block text-sm font-semibold text-gray-400 ml-1">Prompt</label>
               <div className="relative group">
                 <textarea
-                  id="prompt-text"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  className="block w-full p-4 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent min-h-[150px] resize-none transition-all font-sans text-lg"
-                  placeholder="Paste prompt here or try auto-fill..."
+                  className="block w-full p-4 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent min-h-[120px] resize-none transition-all font-sans text-lg"
+                  placeholder="Paste your prompt text here..."
                 />
                 <div className="absolute top-4 right-4 pointer-events-none">
                   <Type className="h-5 w-5 text-gray-600" />
                 </div>
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Category Selection */}
+                <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-400 ml-1">Category</label>
+                    <select 
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value as Category)}
+                        className="block w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent appearance-none"
+                    >
+                        {Object.values(Category).map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Mood Input */}
+                <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-400 ml-1">Mood</label>
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <Smile className="h-4 w-4 text-gray-500" />
+                        </div>
+                        <input
+                            type="text"
+                            value={mood}
+                            onChange={(e) => setMood(e.target.value)}
+                            className="block w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent"
+                            placeholder="e.g. Dark, Cheerful"
+                        />
+                    </div>
+                </div>
+            </div>
+
+             {/* Tags Input */}
+             <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-400 ml-1">Tags (comma separated)</label>
+                <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Tag className="h-4 w-4 text-gray-500" />
+                    </div>
+                    <input
+                        type="text"
+                        value={tagsInput}
+                        onChange={(e) => setTagsInput(e.target.value)}
+                        className="block w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent"
+                        placeholder="cyberpunk, neon, 8k..."
+                    />
+                </div>
             </div>
 
             {error && (
@@ -218,20 +225,9 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={isAnalyzing || !text}
-                className="flex-[2] flex items-center justify-center gap-2 px-6 py-4 bg-white text-dark-bg font-bold rounded-2xl hover:bg-brand-accent hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-[0.98]"
+                className="flex-[2] flex items-center justify-center gap-2 px-6 py-4 bg-white text-dark-bg font-bold rounded-2xl hover:bg-brand-accent hover:text-white transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-[0.98]"
               >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    {isEditMode ? <Save className="w-5 h-5" /> : <Wand2 className="w-5 h-5" />}
-                    {isEditMode ? 'Update Dump' : 'Dump It'}
-                  </>
-                )}
+                {isEditMode ? 'Update Dump' : 'Dump It'}
               </button>
             </div>
           </form>
