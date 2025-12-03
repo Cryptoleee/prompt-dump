@@ -5,9 +5,11 @@ import { PromptCard } from './components/PromptCard';
 import { AddPromptForm } from './components/AddPromptForm';
 import { LoginScreen } from './components/LoginScreen';
 import { PromptDetailModal } from './components/PromptDetailModal';
-import { PromptEntry, Category } from './types';
-import { GUEST_STORAGE_KEY } from './constants';
-import { Layers, AlertTriangle } from 'lucide-react';
+import { ProfileEditModal } from './components/ProfileEditModal';
+import { UserSearchModal } from './components/UserSearchModal';
+import { PromptEntry, Category, UserProfile } from './types';
+import { GUEST_STORAGE_KEY, DEFAULT_BANNER } from './constants';
+import { Layers, AlertTriangle, Users } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User, getRedirectResult } from 'firebase/auth';
 import { 
@@ -18,11 +20,14 @@ import {
   addDoc, 
   deleteDoc, 
   doc, 
-  updateDoc 
+  updateDoc,
+  getDoc
 } from 'firebase/firestore';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  
   const [isGuest, setIsGuest] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   
@@ -36,24 +41,113 @@ const App: React.FC = () => {
   
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | undefined>(undefined);
 
+  // Social Modals
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+
+  // Shared Profile State
+  const [viewingSharedUid, setViewingSharedUid] = useState<string | null>(null);
+
   // 1. Auth Listener
   useEffect(() => {
-    // Check for redirect result first
-    getRedirectResult(auth).catch(e => console.error("Redirect Error", e));
+    // Check URL for shared profile
+    const params = new URLSearchParams(window.location.search);
+    const sharedUid = params.get('uid');
+    if (sharedUid) {
+        setViewingSharedUid(sharedUid);
+    }
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         setIsGuest(false);
+        // Initial Fetch of own profile if not viewing someone else
+        if (!sharedUid) {
+            await fetchUserProfile(currentUser.uid);
+        }
       }
       setLoadingAuth(false);
     });
     return () => unsubscribe();
   }, []);
 
-  // 2. Data Sync Listener
+  // 2. Fetch User Profile Data (Banner, Username etc)
+  const fetchUserProfile = async (uid: string) => {
+    try {
+        const userDocRef = doc(db, 'users', uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+            setUserProfile(userDoc.data() as UserProfile);
+        } else {
+            // If viewing self and no doc exists, create default from Google Auth
+            if (auth.currentUser && uid === auth.currentUser.uid) {
+                const defaultProfile: UserProfile = {
+                    uid: auth.currentUser.uid,
+                    displayName: auth.currentUser.displayName || 'User',
+                    photoURL: auth.currentUser.photoURL || '',
+                };
+                setUserProfile(defaultProfile);
+            } else {
+                // Viewing other user who hasn't set up profile
+                 setUserProfile({
+                    uid,
+                    displayName: 'Unknown User',
+                    photoURL: '',
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Error fetching profile", e);
+    }
+  };
+
+  // 3. Listen for Real-time Profile Updates (Only for logged in user)
   useEffect(() => {
-    // If Guest Mode
+    if (user && !viewingSharedUid) {
+        const unsub = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+            if (doc.exists()) setUserProfile(doc.data() as UserProfile);
+        });
+        return () => unsub();
+    }
+  }, [user, viewingSharedUid]);
+
+  // 4. Update Profile when viewing shared
+  useEffect(() => {
+    if (viewingSharedUid) {
+        fetchUserProfile(viewingSharedUid);
+    }
+  }, [viewingSharedUid]);
+
+
+  // 5. Data Sync Listener (Prompts)
+  useEffect(() => {
+    
+    // Case 1: Viewing Shared Profile (Takes Priority)
+    if (viewingSharedUid) {
+        setLoadingPrompts(true);
+        const q = query(
+          collection(db, 'prompts'),
+          where('userId', '==', viewingSharedUid)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedPrompts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as PromptEntry[];
+          
+          fetchedPrompts.sort((a, b) => b.createdAt - a.createdAt);
+          setPrompts(fetchedPrompts);
+          setLoadingPrompts(false);
+        }, (error) => {
+           console.error("Error fetching shared prompts:", error);
+           setLoadingPrompts(false);
+        });
+        return () => unsubscribe();
+    }
+
+    // Case 2: Guest Mode
     if (isGuest && !user) {
       setLoadingPrompts(true);
       const localData = localStorage.getItem(GUEST_STORAGE_KEY);
@@ -72,37 +166,34 @@ const App: React.FC = () => {
       return;
     }
 
-    // If Not Logged In and Not Guest
-    if (!user) {
-      setPrompts([]);
-      return;
+    // Case 3: Logged In User
+    if (user) {
+        setLoadingPrompts(true);
+        const q = query(
+        collection(db, 'prompts'),
+        where('userId', '==', user.uid)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedPrompts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as PromptEntry[];
+        
+        fetchedPrompts.sort((a, b) => b.createdAt - a.createdAt);
+        setPrompts(fetchedPrompts);
+        setLoadingPrompts(false);
+        }, (error) => {
+        console.error("Error fetching prompts:", error);
+        setLoadingPrompts(false);
+        });
+
+        return () => unsubscribe();
     }
-
-    // Cloud Mode (Firestore)
-    setLoadingPrompts(true);
-    const q = query(
-      collection(db, 'prompts'),
-      where('userId', '==', user.uid)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPrompts = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as PromptEntry[];
-      
-      // Sort by newest first (Client Side)
-      fetchedPrompts.sort((a, b) => b.createdAt - a.createdAt);
-      
-      setPrompts(fetchedPrompts);
-      setLoadingPrompts(false);
-    }, (error) => {
-       console.error("Error fetching prompts:", error);
-       setLoadingPrompts(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, isGuest]);
+    
+    // Case 4: Default (No user, no guest, no share)
+    setPrompts([]);
+  }, [user, isGuest, viewingSharedUid]);
 
   const saveToLocalStorage = (newPrompts: PromptEntry[]) => {
     localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(newPrompts));
@@ -173,7 +264,7 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Error saving prompt: ", e);
-      alert("Failed to save to cloud. Please check your internet connection.");
+      alert("Failed to save to cloud.");
     }
   };
 
@@ -221,14 +312,23 @@ const App: React.FC = () => {
     setIsGuest(true);
   };
 
+  const resetToLogin = () => {
+    setIsGuest(false);
+    setUserProfile(null);
+  };
+
   if (loadingAuth) {
-    return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-brand-accent">Loading...</div>;
+    return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-brand-accent animate-pulse">Loading...</div>;
   }
 
-  // Show Login if not user and not guest
-  if (!user && !isGuest) {
+  // Show Login if not user, not guest, and not viewing shared profile
+  if (!user && !isGuest && !viewingSharedUid) {
     return <LoginScreen onGuestLogin={handleGuestLogin} />;
   }
+
+  // Determine Read-Only Status
+  // It is read-only if we are viewing a shared UID that is NOT our own UID
+  const isReadOnly = !!viewingSharedUid && viewingSharedUid !== user?.uid;
 
   // Filter local state for search/category
   const filteredPrompts = prompts.filter((p) => {
@@ -242,21 +342,66 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-20 font-sans text-gray-200">
-      {/* Background decoration - Dark Mode */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-dark-bg">
-          <div className="absolute top-[-10%] left-[-10%] w-[800px] h-[800px] rounded-full bg-brand-accent/10 blur-[120px]" />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full bg-neon-pink/10 blur-[120px]" />
-          <div className="absolute top-[40%] left-[30%] w-[500px] h-[500px] rounded-full bg-neon-cyan/5 blur-[100px]" />
+      
+      {/* Dynamic Profile Banner */}
+      <div className="relative w-full h-[250px] md:h-[350px] overflow-hidden">
+        <div className="absolute inset-0 bg-dark-bg/20 z-10"></div>
+        <img 
+            src={userProfile?.bannerURL || DEFAULT_BANNER} 
+            alt="Profile Banner" 
+            className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark-bg z-20"></div>
+        
+        {/* Profile Info Overlay */}
+        {userProfile && (
+            <div className="absolute bottom-0 left-0 right-0 z-30 p-6 md:p-8 max-w-7xl mx-auto flex items-end">
+                <div className="flex items-center gap-4">
+                     <img 
+                        src={userProfile.photoURL || 'https://via.placeholder.com/100'} 
+                        alt="Profile" 
+                        className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-dark-bg shadow-xl object-cover bg-dark-card"
+                    />
+                    <div className="mb-2">
+                        <h1 className="text-2xl md:text-3xl font-display font-bold text-white text-shadow">{userProfile.displayName}</h1>
+                        {userProfile.username && <p className="text-brand-accent font-medium">@{userProfile.username}</p>}
+                        {userProfile.bio && <p className="text-gray-300 text-sm mt-1 max-w-md line-clamp-2">{userProfile.bio}</p>}
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
 
-      <Header onAddClick={handleAddClick} user={user} />
+      <Header 
+        onAddClick={handleAddClick} 
+        userProfile={userProfile} 
+        isGuest={isGuest} 
+        isReadOnly={isReadOnly}
+        onGuestLogin={resetToLogin}
+        onEditProfile={() => setIsProfileModalOpen(true)}
+        onOpenSearch={() => setIsSearchModalOpen(true)}
+      />
 
-      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
+        {/* Info Banners */}
         {isGuest && (
           <div className="mb-6 bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-3 flex items-center justify-center gap-2 text-yellow-500 text-sm">
              <AlertTriangle className="w-4 h-4" />
-             Guest Mode: Prompts are saved on this device only. Log in to sync across devices.
+             Guest Mode: Prompts are saved on this device only.
           </div>
+        )}
+
+        {isReadOnly && (
+            <div className="mb-6 bg-brand-accent/20 border border-brand-accent/40 rounded-xl p-3 flex items-center justify-center gap-2 text-brand-accent text-sm">
+                <Users className="w-4 h-4" />
+                Viewing Shared Profile.
+                <button 
+                    onClick={() => window.location.href = '/'}
+                    className="ml-2 font-bold underline hover:text-white"
+                >
+                    Go to My Dump
+                </button>
+            </div>
         )}
 
         <FilterBar
@@ -267,7 +412,7 @@ const App: React.FC = () => {
         />
 
         {loadingPrompts ? (
-             <div className="text-center py-20 text-gray-500 animate-pulse">Syncing your dump...</div>
+             <div className="text-center py-20 text-gray-500 animate-pulse">Loading dump...</div>
         ) : filteredPrompts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="bg-dark-card border border-dark-border p-6 rounded-full shadow-lg mb-6">
@@ -277,11 +422,11 @@ const App: React.FC = () => {
               Empty Dump
             </h3>
             <p className="text-gray-500 max-w-md mx-auto">
-              No prompts here yet. Dump your first one!
+              {isReadOnly ? "This user hasn't dumped anything yet." : "No prompts here yet. Dump your first one!"}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {filteredPrompts.map((prompt) => (
               <PromptCard 
                 key={prompt.id} 
@@ -306,7 +451,20 @@ const App: React.FC = () => {
         onClose={() => setSelectedPrompt(undefined)}
         onDelete={handleDeletePrompt}
         onEdit={handleEditInit}
+        isReadOnly={isReadOnly}
       />
+
+      <ProfileEditModal 
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        currentUser={userProfile}
+      />
+
+      <UserSearchModal 
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+      />
+
     </div>
   );
 };
