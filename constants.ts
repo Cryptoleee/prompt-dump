@@ -1,7 +1,6 @@
 import { PromptEntry, Category } from './types';
 
 export const GUEST_STORAGE_KEY = 'prompt-dump-guest-v1';
-export const DEFAULT_BANNER = 'https://images.unsplash.com/photo-1614850523060-8da1d56ae167?q=80&w=2670&auto=format&fit=crop';
 
 export const INITIAL_PROMPTS: PromptEntry[] = [
   {

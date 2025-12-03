@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, Ghost, AlertTriangle } from 'lucide-react';
-import { signInWithRedirect, getRedirectResult } from "firebase/auth";
+import React, { useState } from 'react';
+import { Sparkles, ArrowRight, Ghost } from 'lucide-react';
+import { signInWithRedirect } from "firebase/auth";
 import { auth, googleProvider } from '../firebase';
 
 interface LoginScreenProps {
@@ -10,28 +10,12 @@ interface LoginScreenProps {
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onGuestLogin }) => {
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    // Check for errors returning from redirect
-    getRedirectResult(auth).catch((err: any) => {
-        console.error("Redirect Login Error:", err);
-        if (err.code === 'auth/unauthorized-domain') {
-            setError(`Domain not authorized. Add "${window.location.hostname}" to Firebase Console > Auth > Settings.`);
-        } else {
-            setError(err.message || 'Could not sign in.');
-        }
-    });
-  }, []);
-
   const handleLogin = async () => {
     try {
       await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/unauthorized-domain') {
-        setError(`Domain not authorized. Add "${window.location.hostname}" to Firebase Console > Auth > Settings.`);
-      } else {
-        setError('Could not sign in. Check console for details.');
-      }
+      setError('Could not sign in. Check console for details.');
     }
   };
 
@@ -97,10 +81,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onGuestLogin }) => {
         </p>
 
         {error && (
-          <div className="mt-6 flex gap-2 items-start text-left text-red-400 text-sm bg-red-900/20 py-3 px-4 rounded-lg border border-red-900/50">
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-            <p>{error}</p>
-          </div>
+          <p className="mt-6 text-red-400 text-sm bg-red-900/20 py-2 px-4 rounded-lg border border-red-900/50">
+            {error}
+          </p>
         )}
       </div>
     </div>

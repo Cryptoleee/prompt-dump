@@ -9,7 +9,6 @@ interface PromptDetailModalProps {
   onClose: () => void;
   onDelete: (id: string) => void;
   onEdit: (prompt: PromptEntry) => void;
-  isReadOnly?: boolean;
 }
 
 export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ 
@@ -17,8 +16,7 @@ export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
   isOpen, 
   onClose,
   onDelete,
-  onEdit,
-  isReadOnly
+  onEdit
 }) => {
   const [showFullText, setShowFullText] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -151,24 +149,20 @@ export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
 
             {/* Action Bar */}
             <div className="flex items-center gap-3 pt-6 border-t border-dark-border">
-                {!isReadOnly && (
-                    <>
-                        <button
-                            onClick={handleEdit}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-bg text-gray-300 hover:text-white hover:bg-white/5 border border-dark-border transition-all text-sm font-medium"
-                        >
-                            <Pencil className="w-4 h-4" />
-                            Edit
-                        </button>
-                        <button
-                            onClick={handleDelete}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-bg text-red-400 hover:text-white hover:bg-red-500/20 border border-dark-border hover:border-red-500/30 transition-all text-sm font-medium"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                        </button>
-                    </>
-                )}
+                <button
+                    onClick={handleEdit}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-bg text-gray-300 hover:text-white hover:bg-white/5 border border-dark-border transition-all text-sm font-medium"
+                >
+                    <Pencil className="w-4 h-4" />
+                    Edit
+                </button>
+                <button
+                    onClick={handleDelete}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-bg text-red-400 hover:text-white hover:bg-red-500/20 border border-dark-border hover:border-red-500/30 transition-all text-sm font-medium"
+                >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                </button>
                 
                 <div className="ml-auto">
                     <button
