@@ -4,10 +4,12 @@ import { FilterBar } from './components/FilterBar';
 import { PromptCard } from './components/PromptCard';
 import { AddPromptForm } from './components/AddPromptForm';
 import { LoginScreen } from './components/LoginScreen';
+import { PromptDetailModal } from './components/PromptDetailModal';
 import { PromptEntry, Category } from './types';
-import { Layers } from 'lucide-react';
+import { GUEST_STORAGE_KEY } from './constants';
+import { Layers, AlertTriangle, Users } from 'lucide-react';
 import { auth, db } from './firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, getRedirectResult } from 'firebase/auth';
 import { 
   collection, 
   query, 
@@ -21,21 +23,39 @@ import {
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   
   const [prompts, setPrompts] = useState<PromptEntry[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
   
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedPrompt, setSelectedPrompt] = useState<PromptEntry | undefined>(undefined);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | undefined>(undefined);
 
+  // Shared Profile State
+  const [viewingSharedUid, setViewingSharedUid] = useState<string | null>(null);
+
   // 1. Auth Listener
   useEffect(() => {
+    // Check URL for shared profile
+    const params = new URLSearchParams(window.location.search);
+    const sharedUid = params.get('uid');
+    if (sharedUid) {
+        setViewingSharedUid(sharedUid);
+    }
+
+    // Check for redirect result first
+    getRedirectResult(auth).catch(e => console.error("Redirect Error", e));
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        setIsGuest(false);
+      }
       setLoadingAuth(false);
     });
     return () => unsubscribe();
@@ -43,38 +63,83 @@ const App: React.FC = () => {
 
   // 2. Data Sync Listener
   useEffect(() => {
-    if (!user) {
-      setPrompts([]);
+    
+    // Case 1: Viewing Shared Profile (Takes Priority)
+    if (viewingSharedUid) {
+        setLoadingPrompts(true);
+        const q = query(
+          collection(db, 'prompts'),
+          where('userId', '==', viewingSharedUid)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedPrompts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as PromptEntry[];
+          
+          fetchedPrompts.sort((a, b) => b.createdAt - a.createdAt);
+          setPrompts(fetchedPrompts);
+          setLoadingPrompts(false);
+        }, (error) => {
+           console.error("Error fetching shared prompts:", error);
+           setLoadingPrompts(false);
+        });
+        return () => unsubscribe();
+    }
+
+    // Case 2: Guest Mode
+    if (isGuest && !user) {
+      setLoadingPrompts(true);
+      const localData = localStorage.getItem(GUEST_STORAGE_KEY);
+      if (localData) {
+        try {
+          const parsed = JSON.parse(localData);
+          setPrompts(parsed.sort((a: PromptEntry, b: PromptEntry) => b.createdAt - a.createdAt));
+        } catch (e) {
+          console.error("Failed to parse guest data", e);
+          setPrompts([]);
+        }
+      } else {
+        setPrompts([]);
+      }
+      setLoadingPrompts(false);
       return;
     }
 
-    setLoadingPrompts(true);
-    // Create query to get prompts for this user only
-    // NOTE: We removed orderBy('createdAt') to prevent "Missing Index" errors.
-    // We will sort it in the javascript below instead.
-    const q = query(
-      collection(db, 'prompts'),
-      where('userId', '==', user.uid)
-    );
+    // Case 3: Logged In User
+    if (user) {
+        setLoadingPrompts(true);
+        const q = query(
+        collection(db, 'prompts'),
+        where('userId', '==', user.uid)
+        );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPrompts = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as PromptEntry[];
-      
-      // Sort by newest first (Client Side)
-      fetchedPrompts.sort((a, b) => b.createdAt - a.createdAt);
-      
-      setPrompts(fetchedPrompts);
-      setLoadingPrompts(false);
-    }, (error) => {
-       console.error("Error fetching prompts:", error);
-       setLoadingPrompts(false);
-    });
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedPrompts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as PromptEntry[];
+        
+        fetchedPrompts.sort((a, b) => b.createdAt - a.createdAt);
+        setPrompts(fetchedPrompts);
+        setLoadingPrompts(false);
+        }, (error) => {
+        console.error("Error fetching prompts:", error);
+        setLoadingPrompts(false);
+        });
 
-    return () => unsubscribe();
-  }, [user]);
+        return () => unsubscribe();
+    }
+    
+    // Case 4: Default (No user, no guest, no share)
+    setPrompts([]);
+  }, [user, isGuest, viewingSharedUid]);
+
+  const saveToLocalStorage = (newPrompts: PromptEntry[]) => {
+    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(newPrompts));
+    setPrompts(newPrompts);
+  };
 
   const handleSavePrompt = async (
     text: string,
@@ -82,11 +147,41 @@ const App: React.FC = () => {
     imageUrl: string,
     analysis: { tags: string[]; category: Category; mood: string }
   ) => {
-    if (!user) return;
+    
+    // GUEST LOGIC
+    if (isGuest) {
+      let updatedPrompts = [...prompts];
+      if (editingPrompt) {
+        updatedPrompts = updatedPrompts.map(p => p.id === editingPrompt.id ? {
+          ...p,
+          text,
+          sourceUrl,
+          imageUrl,
+          tags: analysis.tags,
+          category: analysis.category,
+          mood: analysis.mood
+        } : p);
+      } else {
+        const newPrompt: PromptEntry = {
+          id: Date.now().toString(),
+          text,
+          sourceUrl,
+          imageUrl,
+          tags: analysis.tags,
+          category: analysis.category,
+          mood: analysis.mood,
+          createdAt: Date.now()
+        };
+        updatedPrompts = [newPrompt, ...updatedPrompts];
+      }
+      saveToLocalStorage(updatedPrompts);
+      return;
+    }
 
+    // CLOUD LOGIC
+    if (!user) return;
     try {
       if (editingPrompt) {
-        // Update existing
         const promptRef = doc(db, 'prompts', editingPrompt.id);
         await updateDoc(promptRef, {
           text,
@@ -97,7 +192,6 @@ const App: React.FC = () => {
           mood: analysis.mood
         });
       } else {
-        // Create new in Firestore
         await addDoc(collection(db, 'prompts'), {
           text,
           sourceUrl,
@@ -106,7 +200,7 @@ const App: React.FC = () => {
           category: analysis.category,
           mood: analysis.mood,
           createdAt: Date.now(),
-          userId: user.uid // Securely link to user
+          userId: user.uid
         });
       }
     } catch (e) {
@@ -116,38 +210,65 @@ const App: React.FC = () => {
   };
 
   const handleDeletePrompt = async (id: string) => {
-    if(window.confirm('Are you sure you want to flush this dump?')) {
-      try {
-        await deleteDoc(doc(db, 'prompts', id));
-      } catch (e) {
-        console.error("Error deleting:", e);
+    if(!window.confirm('Are you sure you want to flush this dump?')) return;
+
+    // GUEST LOGIC
+    if (isGuest) {
+      const updatedPrompts = prompts.filter(p => p.id !== id);
+      saveToLocalStorage(updatedPrompts);
+      // Close modal if deleting the open prompt
+      if (selectedPrompt?.id === id) {
+        setSelectedPrompt(undefined);
       }
+      return;
+    }
+
+    // CLOUD LOGIC
+    try {
+      await deleteDoc(doc(db, 'prompts', id));
+      if (selectedPrompt?.id === id) {
+        setSelectedPrompt(undefined);
+      }
+    } catch (e) {
+      console.error("Error deleting:", e);
     }
   }
 
-  const onEditClick = (prompt: PromptEntry) => {
+  const handleEditInit = (prompt: PromptEntry) => {
     setEditingPrompt(prompt);
-    setIsModalOpen(true);
+    setIsAddModalOpen(true);
   };
 
-  const handleModalClose = () => {
-    setIsModalOpen(false);
+  const handleAddModalClose = () => {
+    setIsAddModalOpen(false);
     setEditingPrompt(undefined);
   };
 
   const handleAddClick = () => {
     setEditingPrompt(undefined);
-    setIsModalOpen(true);
+    setIsAddModalOpen(true);
+  };
+
+  const handleGuestLogin = () => {
+    setIsGuest(true);
+  };
+
+  const resetToLogin = () => {
+    setIsGuest(false);
   };
 
   if (loadingAuth) {
     return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-brand-accent">Loading...</div>;
   }
 
-  // If not logged in, show Login Screen
-  if (!user) {
-    return <LoginScreen />;
+  // Show Login if not user, not guest, and not viewing shared profile
+  if (!user && !isGuest && !viewingSharedUid) {
+    return <LoginScreen onGuestLogin={handleGuestLogin} />;
   }
+
+  // Determine Read-Only Status
+  // It is read-only if we are viewing a shared UID that is NOT our own UID
+  const isReadOnly = !!viewingSharedUid && viewingSharedUid !== user?.uid;
 
   // Filter local state for search/category
   const filteredPrompts = prompts.filter((p) => {
@@ -168,9 +289,36 @@ const App: React.FC = () => {
           <div className="absolute top-[40%] left-[30%] w-[500px] h-[500px] rounded-full bg-neon-cyan/5 blur-[100px]" />
       </div>
 
-      <Header onAddClick={handleAddClick} user={user} />
+      <Header 
+        onAddClick={handleAddClick} 
+        user={user} 
+        isGuest={isGuest} 
+        isReadOnly={isReadOnly}
+        onGuestLogin={resetToLogin}
+      />
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Info Banners */}
+        {isGuest && (
+          <div className="mb-6 bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-3 flex items-center justify-center gap-2 text-yellow-500 text-sm animate-in fade-in slide-in-from-top-4">
+             <AlertTriangle className="w-4 h-4" />
+             Guest Mode: Prompts are saved on this device only.
+          </div>
+        )}
+
+        {isReadOnly && (
+            <div className="mb-6 bg-brand-accent/20 border border-brand-accent/40 rounded-xl p-3 flex items-center justify-center gap-2 text-brand-accent text-sm animate-in fade-in slide-in-from-top-4">
+                <Users className="w-4 h-4" />
+                Viewing Shared Profile. These are not your prompts.
+                <button 
+                    onClick={() => window.location.href = '/'}
+                    className="ml-2 font-bold underline hover:text-white"
+                >
+                    Go Home
+                </button>
+            </div>
+        )}
+
         <FilterBar
           search={search}
           onSearchChange={setSearch}
@@ -179,7 +327,7 @@ const App: React.FC = () => {
         />
 
         {loadingPrompts ? (
-             <div className="text-center py-20 text-gray-500 animate-pulse">Syncing your dump...</div>
+             <div className="text-center py-20 text-gray-500 animate-pulse">Syncing dump...</div>
         ) : filteredPrompts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="bg-dark-card border border-dark-border p-6 rounded-full shadow-lg mb-6">
@@ -189,7 +337,7 @@ const App: React.FC = () => {
               Empty Dump
             </h3>
             <p className="text-gray-500 max-w-md mx-auto">
-              No prompts here yet. Dump your first one!
+              {isReadOnly ? "This user hasn't dumped anything yet." : "No prompts here yet. Dump your first one!"}
             </p>
           </div>
         ) : (
@@ -198,8 +346,7 @@ const App: React.FC = () => {
               <PromptCard 
                 key={prompt.id} 
                 prompt={prompt} 
-                onDelete={handleDeletePrompt}
-                onEdit={onEditClick}
+                onClick={() => setSelectedPrompt(prompt)}
               />
             ))}
           </div>
@@ -207,10 +354,19 @@ const App: React.FC = () => {
       </main>
 
       <AddPromptForm
-        isOpen={isModalOpen}
-        onClose={handleModalClose}
+        isOpen={isAddModalOpen}
+        onClose={handleAddModalClose}
         onSubmit={handleSavePrompt}
         initialData={editingPrompt}
+      />
+
+      <PromptDetailModal 
+        prompt={selectedPrompt}
+        isOpen={!!selectedPrompt}
+        onClose={() => setSelectedPrompt(undefined)}
+        onDelete={handleDeletePrompt}
+        onEdit={handleEditInit}
+        isReadOnly={isReadOnly}
       />
     </div>
   );

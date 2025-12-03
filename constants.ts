@@ -1,5 +1,7 @@
 import { PromptEntry, Category } from './types';
 
+export const GUEST_STORAGE_KEY = 'prompt-dump-guest-v1';
+
 export const INITIAL_PROMPTS: PromptEntry[] = [
   {
     id: '1',

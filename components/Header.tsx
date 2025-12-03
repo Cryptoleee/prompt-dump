@@ -1,18 +1,40 @@
-import React from 'react';
-import { Sparkles, Plus, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sparkles, Plus, LogOut, Share2, LogIn, Check } from 'lucide-react';
 import { User, signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
 interface HeaderProps {
   onAddClick: () => void;
   user?: User | null;
+  isGuest?: boolean;
+  isReadOnly?: boolean;
+  onGuestLogin?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onAddClick, user }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+  onAddClick, 
+  user, 
+  isGuest,
+  isReadOnly,
+  onGuestLogin
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleShareProfile = () => {
+    if (!user) return;
+    const url = `${window.location.origin}?uid=${user.uid}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full glass-panel mb-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-        <div className="flex items-center gap-3 group cursor-pointer select-none">
+        <div 
+            className="flex items-center gap-3 group cursor-pointer select-none" 
+            onClick={() => window.location.href = '/'}
+        >
           <div className="relative">
             <div className="absolute inset-0 bg-brand-accent blur-lg opacity-40 group-hover:opacity-60 transition-opacity rounded-full"></div>
             <div className="relative bg-gradient-to-br from-brand-accent to-neon-pink p-2 rounded-xl shadow-lg group-hover:scale-105 transition-transform duration-300 border border-white/10">
@@ -25,8 +47,34 @@ export const Header: React.FC<HeaderProps> = ({ onAddClick, user }) => {
         </div>
 
         <div className="flex items-center gap-4">
+          
+          {/* Guest Login Button */}
+          {isGuest && onGuestLogin && (
+            <button
+              onClick={onGuestLogin}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all border border-white/5"
+            >
+              <LogIn className="w-4 h-4" />
+              Log In
+            </button>
+          )}
+
           {user && (
             <div className="flex items-center gap-3 mr-2">
+                {/* Share Profile Button */}
+                <button
+                    onClick={handleShareProfile}
+                    className={`p-2 transition-all rounded-full border ${
+                        copied 
+                        ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                        : 'text-gray-400 hover:text-brand-accent bg-white/5 hover:bg-brand-accent/10 border-transparent hover:border-brand-accent/20'
+                    }`}
+                    title="Share Profile Link"
+                >
+                    {copied ? <Check className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
+                </button>
+
+                {/* Avatar */}
                 {user.photoURL ? (
                     <img 
                       src={user.photoURL} 
@@ -38,6 +86,8 @@ export const Header: React.FC<HeaderProps> = ({ onAddClick, user }) => {
                         {user.displayName?.charAt(0) || 'U'}
                     </div>
                 )}
+                
+                {/* Sign Out */}
                 <button 
                   onClick={() => signOut(auth)}
                   className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-full"
@@ -48,14 +98,16 @@ export const Header: React.FC<HeaderProps> = ({ onAddClick, user }) => {
             </div>
           )}
 
-          <button
-            onClick={onAddClick}
-            className="flex items-center gap-2 bg-white text-dark-bg px-5 py-2.5 rounded-full font-bold shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(255,255,255,0.3)] hover:-translate-y-0.5 transition-all active:translate-y-0 duration-200"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="hidden sm:inline">Dump It</span>
-            <span className="sm:hidden">Add</span>
-          </button>
+          {!isReadOnly && (
+            <button
+                onClick={onAddClick}
+                className="flex items-center gap-2 bg-white text-dark-bg px-5 py-2.5 rounded-full font-bold shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_25px_rgba(255,255,255,0.3)] hover:-translate-y-0.5 transition-all active:translate-y-0 duration-200"
+            >
+                <Plus className="w-5 h-5" />
+                <span className="hidden sm:inline">Dump It</span>
+                <span className="sm:hidden">Add</span>
+            </button>
+          )}
         </div>
       </div>
     </header>
