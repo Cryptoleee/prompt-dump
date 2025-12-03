@@ -1,195 +1,108 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Camera, Save, Loader2, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Save, Upload, Loader2, Image as ImageIcon, AtSign } from 'lucide-react';
 import { UserProfile } from '../types';
-import { auth, db, storage } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentUser: UserProfile | null;
+  onSave: (username: string, bannerUrl: string, avatarUrl: string) => Promise<void>;
+  currentProfile: UserProfile;
 }
 
-export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
-  isOpen,
-  onClose,
-  currentUser
-}) => {
-  const [displayName, setDisplayName] = useState('');
-  const [username, setUsername] = useState('');
-  const [bio, setBio] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [bannerUrl, setBannerUrl] = useState('');
-  
-  const [loading, setLoading] = useState(false);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  const bannerInputRef = useRef<HTMLInputElement>(null);
+export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onClose, onSave, currentProfile }) => {
+  const [username, setUsername] = useState(currentProfile.username || '');
+  const [bannerUrl, setBannerUrl] = useState(currentProfile.bannerURL || '');
+  const [avatarUrl, setAvatarUrl] = useState(currentProfile.photoURL || '');
+  const [isUploading, setIsUploading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && currentUser) {
-      setDisplayName(currentUser.displayName || '');
-      setUsername(currentUser.username || '');
-      setBio(currentUser.bio || '');
-      setAvatarUrl(currentUser.photoURL || '');
-      setBannerUrl(currentUser.bannerURL || '');
-    }
-  }, [isOpen, currentUser]);
+  if (!isOpen) return null;
 
-  if (!isOpen || !currentUser) return null;
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'banner' | 'avatar') => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
-    // Max 5MB
-    if (file.size > 5 * 1024 * 1024) {
-        alert("File too large. Max 5MB.");
-        return;
-    }
 
     try {
-        setLoading(true);
-        const fileName = `${auth.currentUser?.uid}_${type}_${Date.now()}`;
-        const storageRef = ref(storage, `profiles/${fileName}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        
-        if (type === 'avatar') setAvatarUrl(url);
-        else setBannerUrl(url);
-    } catch (error) {
-        console.error("Upload failed", error);
-        alert("Failed to upload image.");
+      setIsUploading(true);
+      const path = `users/${currentProfile.uid}/${type}_${Date.now()}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      
+      if (type === 'banner') setBannerUrl(url);
+      else setAvatarUrl(url);
+    } catch (err) {
+      console.error(err);
+      alert("Upload failed.");
     } finally {
-        setLoading(false);
+      setIsUploading(false);
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
-    
-    try {
-        setLoading(true);
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        
-        const profileData: UserProfile = {
-            uid: auth.currentUser.uid,
-            displayName,
-            photoURL: avatarUrl,
-            bannerURL: bannerUrl,
-            username: username.replace('@', ''), // Strip @ if added by user
-            bio
-        };
-
-        await setDoc(userRef, profileData, { merge: true });
-        onClose();
-    } catch (error) {
-        console.error("Save failed", error);
-        alert("Failed to update profile.");
-    } finally {
-        setLoading(false);
-    }
+    await onSave(username, bannerUrl, avatarUrl);
+    onClose();
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="relative w-full max-w-lg bg-dark-card border border-dark-border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        
-        <form onSubmit={handleSave}>
-            {/* Banner Preview & Edit */}
-            <div className="relative h-32 bg-gray-800">
-                {bannerUrl && <img src={bannerUrl} alt="Banner" className="w-full h-full object-cover opacity-60" />}
-                <button
-                    type="button"
-                    onClick={() => bannerInputRef.current?.click()}
-                    className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors border border-white/20"
-                    title="Change Banner"
-                >
-                    <Camera className="w-4 h-4" />
-                </button>
-                <input ref={bannerInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'banner')} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-dark-card border border-dark-border rounded-3xl shadow-2xl p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-white">Edit Profile</h2>
+          <button onClick={onClose} className="p-2 bg-white/5 rounded-full hover:bg-white/10">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-6">
+          {/* Banner Upload */}
+          <div className="space-y-2">
+            <label className="text-sm text-gray-400 font-medium">Profile Banner</label>
+            <div 
+              className="relative h-32 rounded-xl bg-dark-bg border-2 border-dashed border-dark-border flex items-center justify-center overflow-hidden group cursor-pointer"
+              onClick={() => document.getElementById('bannerInput')?.click()}
+            >
+              {bannerUrl ? (
+                <img src={bannerUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" alt="Banner" />
+              ) : (
+                <div className="text-center p-4">
+                    <ImageIcon className="w-6 h-6 mx-auto text-gray-500 mb-2" />
+                    <span className="text-xs text-gray-500">Tap to upload banner</span>
+                </div>
+              )}
+              <input type="file" id="bannerInput" className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'banner')} />
             </div>
+          </div>
 
-            {/* Avatar & Content */}
-            <div className="px-6 pb-6 -mt-10 relative">
-                <div className="relative inline-block">
-                    <img 
-                        src={avatarUrl || 'https://via.placeholder.com/100'} 
-                        alt="Avatar" 
-                        className="w-20 h-20 rounded-full border-4 border-dark-card object-cover bg-dark-bg" 
-                    />
-                    <button
-                        type="button"
-                        onClick={() => avatarInputRef.current?.click()}
-                        className="absolute bottom-0 right-0 p-1.5 bg-brand-accent text-white rounded-full shadow-lg border border-dark-card hover:bg-brand-accent/80 transition-colors"
-                        title="Change Avatar"
-                    >
-                        <Upload className="w-3 h-3" />
-                    </button>
-                    <input ref={avatarInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'avatar')} />
+          {/* Username */}
+          <div className="space-y-2">
+            <label className="text-sm text-gray-400 font-medium">Username</label>
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <AtSign className="h-4 w-4 text-gray-500" />
                 </div>
-
-                <div className="mt-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Display Name</label>
-                            <input
-                                type="text"
-                                value={displayName}
-                                onChange={e => setDisplayName(e.target.value)}
-                                className="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-white focus:ring-2 focus:ring-brand-accent focus:outline-none"
-                                placeholder="Your Name"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Username</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-2 text-gray-500">@</span>
-                                <input
-                                    type="text"
-                                    value={username}
-                                    onChange={e => setUsername(e.target.value)}
-                                    className="w-full bg-dark-bg border border-dark-border rounded-xl pl-7 pr-3 py-2 text-white focus:ring-2 focus:ring-brand-accent focus:outline-none"
-                                    placeholder="username"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bio</label>
-                        <textarea
-                            value={bio}
-                            onChange={e => setBio(e.target.value)}
-                            className="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-white focus:ring-2 focus:ring-brand-accent focus:outline-none h-20 resize-none"
-                            placeholder="Tell us about your prompts..."
-                        />
-                    </div>
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl transition-colors font-medium text-sm"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex items-center gap-2 px-6 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white rounded-xl transition-colors font-bold text-sm shadow-lg shadow-brand-accent/20"
-                    >
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Save Profile
-                    </button>
-                </div>
+                <input 
+                    type="text" 
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    className="w-full bg-dark-bg border border-dark-border rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-accent outline-none"
+                    placeholder="username"
+                    maxLength={20}
+                />
             </div>
+          </div>
+
+          <button 
+            type="submit" 
+            disabled={isUploading}
+            className="w-full bg-brand-accent text-white font-bold py-3 rounded-xl hover:bg-brand-accent/90 transition-colors flex items-center justify-center gap-2"
+          >
+            {isUploading ? <Loader2 className="animate-spin" /> : <Save className="w-5 h-5" />}
+            Save Profile
+          </button>
         </form>
       </div>
     </div>

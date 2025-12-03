@@ -7,7 +7,15 @@ export interface PromptEntry {
   category: Category;
   mood?: string;
   createdAt: number;
-  userId?: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  displayName: string;
+  username?: string;
+  photoURL?: string;
+  bannerURL?: string;
+  bio?: string;
 }
 
 export enum Category {
@@ -24,13 +32,4 @@ export interface AnalysisResult {
   tags: string[];
   category: Category;
   mood: string;
-}
-
-export interface UserProfile {
-  uid: string;
-  displayName: string;
-  photoURL: string;
-  bannerURL?: string;
-  username?: string;
-  bio?: string;
 }

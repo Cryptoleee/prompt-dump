@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'prompt-dump-v1';
+const CACHE_NAME = 'prompt-dump-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
