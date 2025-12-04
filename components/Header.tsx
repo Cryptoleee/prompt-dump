@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {(user || isGuest) && (
             <div className="flex items-center gap-2 sm:gap-3 mr-2">
-                {/* Avatar */}
+                {/* Avatar - Clickable for Guests */}
                 {userProfile?.photoURL ? (
                     <img 
                       src={userProfile.photoURL} 
@@ -73,9 +73,17 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-9 h-9 rounded-full border border-white/20 shadow-sm object-cover" 
                     />
                 ) : (
-                    <div className="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold border border-white/10 uppercase">
-                        {userProfile?.username?.charAt(0) || 'G'}
-                    </div>
+                    <button 
+                        onClick={isGuest ? handleGuestLogin : undefined}
+                        className={`w-9 h-9 rounded-full flex items-center justify-center font-bold border border-white/10 uppercase transition-all ${
+                            isGuest 
+                            ? 'bg-brand-accent text-white hover:bg-white hover:text-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.4)]' 
+                            : 'bg-brand-accent/20 text-brand-accent'
+                        }`}
+                        title={isGuest ? "Click to Sign In" : undefined}
+                    >
+                        {isGuest ? 'G' : (userProfile?.username?.charAt(0) || 'U')}
+                    </button>
                 )}
 
                 {/* Profile Actions */}
@@ -93,10 +101,10 @@ export const Header: React.FC<HeaderProps> = ({
                     </>
                 )}
 
-                {/* Guest Actions */}
+                {/* Guest Actions - Explicit Text Button for clarity on desktop */}
                 {isGuest && (
-                    <button onClick={handleGuestLogin} className="p-2 text-brand-accent hover:text-white bg-brand-accent/10 hover:bg-brand-accent rounded-full transition-colors" title="Log In to Sync">
-                        <LogIn className="w-4 h-4" />
+                    <button onClick={handleGuestLogin} className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-brand-accent bg-brand-accent/10 hover:bg-brand-accent hover:text-white rounded-lg transition-colors ml-1">
+                        Sign In
                     </button>
                 )}
             </div>

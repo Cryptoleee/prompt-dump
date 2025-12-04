@@ -249,13 +249,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper to append timestamp properly
-  const getCacheBustedUrl = (url?: string) => {
-      if (!url) return DEFAULT_BANNER;
-      const separator = url.includes('?') ? '&' : '?';
-      return `${url}${separator}t=${Date.now()}`;
-  };
-
   // --- Modals ---
 
   const openEdit = (prompt: PromptEntry) => {
@@ -300,7 +293,7 @@ const App: React.FC = () => {
       <div className="relative h-64 w-full overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark-bg z-10" />
         <img 
-            src={getCacheBustedUrl(userProfile?.bannerURL)} 
+            src={userProfile?.bannerURL || DEFAULT_BANNER} 
             className="w-full h-full object-cover opacity-60"
             alt="Banner"
         />
