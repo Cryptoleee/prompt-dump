@@ -80,9 +80,6 @@ export const FollowingModal: React.FC<FollowingModalProps> = ({ isOpen, onClose,
                         />
                         <div>
                             <div className="text-white font-medium">@{user.username}</div>
-                            {user.displayName && user.displayName !== user.username && (
-                                <div className="text-xs text-gray-500 hidden">{user.displayName}</div>
-                            )}
                         </div>
                     </a>
                 ))}

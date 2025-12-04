@@ -38,7 +38,6 @@ export const Header: React.FC<HeaderProps> = ({
   const handleGuestLogin = async () => {
      try {
         await signInWithPopup(auth, googleProvider);
-        window.location.reload(); 
      } catch (e) {
         console.error(e);
      }
@@ -91,12 +90,18 @@ export const Header: React.FC<HeaderProps> = ({
                         onClick={isGuest ? handleGuestLogin : undefined}
                         className={`w-9 h-9 rounded-full flex items-center justify-center font-bold border border-white/10 uppercase transition-all ${
                             isGuest 
-                            ? 'bg-brand-accent text-white hover:bg-white hover:text-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.4)]' 
-                            : 'bg-brand-accent/20 text-brand-accent'
+                            ? 'bg-brand-accent text-white hover:bg-white hover:text-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.4)] cursor-pointer' 
+                            : 'bg-brand-accent/20 text-brand-accent cursor-default'
                         }`}
-                        title={isGuest ? "Click to Sign In" : undefined}
+                        title={isGuest ? "Sign In" : undefined}
                     >
                         {isGuest ? 'G' : (userProfile?.username?.charAt(0) || 'U')}
+                    </button>
+                )}
+                
+                {isGuest && (
+                    <button onClick={handleGuestLogin} className="hidden sm:flex text-xs font-bold text-white hover:text-brand-accent transition-colors">
+                        Sign In
                     </button>
                 )}
 
@@ -112,12 +117,6 @@ export const Header: React.FC<HeaderProps> = ({
                         <LogOut className="w-4 h-4" />
                     </button>
                     </>
-                )}
-
-                {isGuest && (
-                    <button onClick={handleGuestLogin} className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-brand-accent bg-brand-accent/10 hover:bg-brand-accent hover:text-white rounded-lg transition-colors ml-1">
-                        Sign In
-                    </button>
                 )}
             </div>
           )}
