@@ -31,7 +31,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         />
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-auto no-scrollbar mask-gradient">
+      <div className="flex gap-2 overflow-x-auto p-2 pr-4 w-full md:w-auto no-scrollbar">
         <button
           onClick={() => onCategoryChange('All')}
           className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
