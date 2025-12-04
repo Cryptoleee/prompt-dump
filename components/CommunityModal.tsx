@@ -11,7 +11,7 @@ interface CommunityModalProps {
   followingIds: string[];
 }
 
-// Moved outside to prevent re-creation on every render
+// UserListItem moved outside main component
 const UserListItem: React.FC<{ user: UserProfile; followingIds: string[] }> = ({ user, followingIds }) => (
     <a 
         href={`/?uid=${user.uid}`}

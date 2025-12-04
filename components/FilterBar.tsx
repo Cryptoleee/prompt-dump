@@ -19,7 +19,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   return (
     <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
       {/* Search Input */}
-      <div className="relative w-full md:w-96 group z-10">
+      <div className="relative w-full md:w-96 group z-10 flex-shrink-0">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <Search className="h-5 w-5 text-gray-500 group-focus-within:text-brand-accent transition-colors" />
         </div>
@@ -32,10 +32,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         />
       </div>
 
-      {/* Categories Scroll Container - Fixed Clipping */}
-      <div className="w-full md:w-auto overflow-hidden">
-        <div className="overflow-x-auto pb-4 pt-1 -mb-4 w-full no-scrollbar px-1">
-            <div className="flex gap-2 min-w-max pr-4">
+      {/* Categories Scroll Container - Fixed Clipping with flex-1 and min-w-0 */}
+      <div className="w-full md:min-w-0 md:flex-1">
+        <div className="overflow-x-auto pb-4 pt-1 -mb-4 no-scrollbar w-full">
+            <div className="flex gap-2 px-1 pr-8 min-w-max">
                 <button
                 onClick={() => onCategoryChange('All')}
                 className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${

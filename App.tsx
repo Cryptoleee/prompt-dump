@@ -8,7 +8,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { PromptDetailModal } from './components/PromptDetailModal';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { CommunityModal } from './components/CommunityModal';
-import { PromptEntry, Category, UserProfile, GUEST_USER_ID } from './types';
+import { PromptEntry, UserProfile, GUEST_USER_ID } from './types';
 import { GUEST_STORAGE_KEY, DEFAULT_BANNER } from './constants';
 import { Layers, Ghost, AlertTriangle, UserPlus, UserCheck, Heart } from 'lucide-react';
 import { auth, db } from './firebase';
@@ -51,7 +51,7 @@ const App: React.FC = () => {
   const [communityModalOpen, setCommunityModalOpen] = useState(false);
   
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | 'All' | 'Favorites'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | undefined>(undefined);
   const [selectedPrompt, setSelectedPrompt] = useState<PromptEntry | undefined>(undefined);
