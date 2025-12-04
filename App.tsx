@@ -7,11 +7,10 @@ import { AddPromptForm } from './components/AddPromptForm';
 import { LoginScreen } from './components/LoginScreen';
 import { PromptDetailModal } from './components/PromptDetailModal';
 import { ProfileEditModal } from './components/ProfileEditModal';
-import { UserSearchModal } from './components/UserSearchModal';
-import { FollowingModal } from './components/FollowingModal';
+import { CommunityModal } from './components/CommunityModal';
 import { PromptEntry, Category, UserProfile, GUEST_USER_ID } from './types';
 import { GUEST_STORAGE_KEY, DEFAULT_BANNER } from './constants';
-import { Layers, Ghost, AlertTriangle, UserPlus, UserCheck } from 'lucide-react';
+import { Layers, Ghost, AlertTriangle, UserPlus, UserCheck, Heart } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
@@ -26,7 +25,8 @@ import {
   getDoc,
   setDoc,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  documentId
 } from 'firebase/firestore';
 
 const App: React.FC = () => {
@@ -49,11 +49,10 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [followingModalOpen, setFollowingModalOpen] = useState(false);
+  const [communityModalOpen, setCommunityModalOpen] = useState(false);
   
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | 'All'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string | 'All' | 'Favorites'>('All');
   
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | undefined>(undefined);
   const [selectedPrompt, setSelectedPrompt] = useState<PromptEntry | undefined>(undefined);
@@ -81,7 +80,7 @@ const App: React.FC = () => {
 
   // 3. Fetch User Profile
   useEffect(() => {
-    // A. Fetch Current User Profile (for Following list etc)
+    // A. Fetch Current User Profile (for Following list, Likes etc)
     if (user && !isGuest) {
         const fetchCurrentUser = async () => {
             const docRef = doc(db, 'users', user.uid);
@@ -128,7 +127,8 @@ const App: React.FC = () => {
                     username: '', // Empty triggers onboarding
                     photoURL: user.photoURL || '',
                     bannerURL: DEFAULT_BANNER,
-                    following: []
+                    following: [],
+                    likedPrompts: []
                 };
                 setUserProfile(newProfile);
                 setIsOnboarding(true);
@@ -155,15 +155,49 @@ const App: React.FC = () => {
     if (isGuest) {
       const stored = localStorage.getItem(GUEST_STORAGE_KEY);
       if (stored) {
-        setPrompts(JSON.parse(stored));
+        const guestPrompts = JSON.parse(stored);
+        if (selectedCategory === 'Favorites') {
+           // Mock favorites for guest using local storage if needed, or just show none
+           setPrompts([]); 
+        } else {
+           setPrompts(guestPrompts);
+        }
       }
       setLoadingPrompts(false);
       return;
     }
 
+    setLoadingPrompts(true);
+
+    // SPECIAL CASE: FAVORITES TAB
+    if (selectedCategory === 'Favorites') {
+        if (!currentUserProfile?.likedPrompts || currentUserProfile.likedPrompts.length === 0) {
+            setPrompts([]);
+            setLoadingPrompts(false);
+            return;
+        }
+
+        // Fetch liked prompts individually (Firestore 'in' query limit is 10, parallel fetch is safer for unknown sizes)
+        const fetchLiked = async () => {
+            try {
+                // If the list is huge, we might need a better solution, but for now fetch all
+                const promises = currentUserProfile.likedPrompts!.map(id => getDoc(doc(db, 'prompts', id)));
+                const snaps = await Promise.all(promises);
+                const liked = snaps.filter(s => s.exists()).map(s => ({ id: s.id, ...s.data() } as PromptEntry));
+                setPrompts(liked);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoadingPrompts(false);
+            }
+        };
+        fetchLiked();
+        return;
+    }
+
+    // NORMAL CASE: VIEWING USER PROFILE
     if (!viewingUid) return;
 
-    setLoadingPrompts(true);
     const q = query(
       collection(db, 'prompts'),
       where('userId', '==', viewingUid)
@@ -184,7 +218,7 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [viewingUid, isGuest]);
+  }, [viewingUid, isGuest, selectedCategory, currentUserProfile?.likedPrompts]);
 
 
   // --- Actions ---
@@ -207,9 +241,11 @@ const App: React.FC = () => {
     };
 
     if (isGuest) {
+        const stored = localStorage.getItem(GUEST_STORAGE_KEY);
+        const currentPrompts = stored ? JSON.parse(stored) : [];
         const newPrompts = editingPrompt 
-            ? prompts.map(p => p.id === editingPrompt.id ? { ...newEntry, id: p.id } : p)
-            : [{ ...newEntry, id: Date.now().toString() }, ...prompts];
+            ? currentPrompts.map((p: PromptEntry) => p.id === editingPrompt.id ? { ...newEntry, id: p.id } : p)
+            : [{ ...newEntry, id: Date.now().toString() }, ...currentPrompts];
         
         setPrompts(newPrompts);
         localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(newPrompts));
@@ -287,6 +323,29 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLikeToggle = async (promptId: string) => {
+      if (!user) return; // Guest likes not fully supported yet in this version, could add local array
+
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const isLiked = currentUserProfile?.likedPrompts?.includes(promptId);
+
+        if (isLiked) {
+             await updateDoc(userRef, {
+                likedPrompts: arrayRemove(promptId)
+            });
+            setCurrentUserProfile(prev => prev ? ({ ...prev, likedPrompts: prev.likedPrompts?.filter(id => id !== promptId) }) : undefined);
+        } else {
+             await updateDoc(userRef, {
+                likedPrompts: arrayUnion(promptId)
+            });
+            setCurrentUserProfile(prev => prev ? ({ ...prev, likedPrompts: [...(prev.likedPrompts || []), promptId] }) : undefined);
+        }
+      } catch (e) {
+          console.error("Like error", e);
+      }
+  };
+
   // --- Modals ---
 
   const openEdit = (prompt: PromptEntry) => {
@@ -313,71 +372,89 @@ const App: React.FC = () => {
   const showGuestBanner = isGuest;
   const showSharedBanner = isReadOnly && userProfile;
   const isFollowing = currentUserProfile?.following?.includes(viewingUid || '');
-
+  
+  // Filtering
   const filteredPrompts = prompts.filter((p) => {
     const matchesSearch =
       p.text.toLowerCase().includes(search.toLowerCase()) ||
       p.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()));
+    
+    // Favorites is handled in useEffect, so here we just check if normal categories apply
+    // If selectedCategory is Favorites, prompts array is ALREADY filtered to favorites
     const matchesCategory =
-      selectedCategory === 'All' || p.category === selectedCategory;
+      selectedCategory === 'All' || selectedCategory === 'Favorites' || p.category === selectedCategory;
+      
     return matchesSearch && matchesCategory;
   });
 
   return (
     <div className="min-h-screen pb-20 font-sans text-gray-200">
       
-      {/* Dynamic Profile Banner */}
-      <div className="relative h-64 w-full overflow-hidden group">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark-bg z-10" />
-        <img 
-            src={userProfile?.bannerURL || DEFAULT_BANNER} 
-            className="w-full h-full object-cover opacity-60"
-            alt="Banner"
-        />
-        <div className="absolute bottom-0 left-0 w-full z-20 p-6 flex items-end justify-between">
-             <div className="max-w-7xl mx-auto w-full flex items-end justify-between gap-4">
-                <div className="flex items-end gap-4">
-                    <img 
-                        src={userProfile?.photoURL || (user?.photoURL) || `https://ui-avatars.com/api/?name=${userProfile?.username || 'user'}`} 
-                        className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl object-cover"
-                    />
-                    <div className="mb-2">
-                        <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
-                            {userProfile?.username ? `@${userProfile.username}` : (isOnboarding ? 'Welcome' : '@anonymous')}
-                        </h1>
-                        <div className="flex gap-4 mt-1 text-sm text-gray-400 font-medium">
-                            <span>{prompts.length} Dumps</span>
-                            {/* Simple follower count visualization if available in future */}
+      {/* Dynamic Profile Banner - Hide if viewing Favorites */}
+      {selectedCategory !== 'Favorites' && (
+        <div className="relative h-64 w-full overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark-bg z-10" />
+            <img 
+                src={userProfile?.bannerURL || DEFAULT_BANNER} 
+                className="w-full h-full object-cover opacity-60"
+                alt="Banner"
+            />
+            <div className="absolute bottom-0 left-0 w-full z-20 p-6 flex items-end justify-between">
+                <div className="max-w-7xl mx-auto w-full flex items-end justify-between gap-4">
+                    <div className="flex items-end gap-4">
+                        <img 
+                            src={userProfile?.photoURL || (user?.photoURL) || `https://ui-avatars.com/api/?name=${userProfile?.username || 'user'}`} 
+                            className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl object-cover"
+                        />
+                        <div className="mb-2">
+                            <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
+                                {userProfile?.username ? `@${userProfile.username}` : (isOnboarding ? 'Welcome' : '@anonymous')}
+                            </h1>
+                            <div className="flex gap-4 mt-1 text-sm text-gray-400 font-medium">
+                                <span>{prompts.length} Dumps</span>
+                                {/* Simple follower count visualization if available in future */}
+                            </div>
                         </div>
                     </div>
+                    
+                    {/* Follow Button */}
+                    {isReadOnly && user && !isGuest && (
+                        <button 
+                            onClick={handleFollowToggle}
+                            className={`mb-3 px-5 py-2 rounded-full font-bold flex items-center gap-2 transition-all ${
+                                isFollowing 
+                                ? 'bg-white/10 text-white hover:bg-red-500/20 hover:text-red-400 border border-white/10' 
+                                : 'bg-brand-accent text-white hover:bg-brand-accent/90 shadow-lg'
+                            }`}
+                        >
+                            {isFollowing ? (
+                                <>
+                                    <UserCheck className="w-4 h-4" />
+                                    Following
+                                </>
+                            ) : (
+                                <>
+                                    <UserPlus className="w-4 h-4" />
+                                    Follow
+                                </>
+                            )}
+                        </button>
+                    )}
                 </div>
-                
-                {/* Follow Button */}
-                {isReadOnly && user && !isGuest && (
-                    <button 
-                        onClick={handleFollowToggle}
-                        className={`mb-3 px-5 py-2 rounded-full font-bold flex items-center gap-2 transition-all ${
-                            isFollowing 
-                            ? 'bg-white/10 text-white hover:bg-red-500/20 hover:text-red-400 border border-white/10' 
-                            : 'bg-brand-accent text-white hover:bg-brand-accent/90 shadow-lg'
-                        }`}
-                    >
-                        {isFollowing ? (
-                            <>
-                                <UserCheck className="w-4 h-4" />
-                                Following
-                            </>
-                        ) : (
-                            <>
-                                <UserPlus className="w-4 h-4" />
-                                Follow
-                            </>
-                        )}
-                    </button>
-                )}
-             </div>
+            </div>
         </div>
-      </div>
+      )}
+
+      {selectedCategory === 'Favorites' && (
+           <div className="relative h-40 w-full bg-dark-bg border-b border-dark-border mb-8">
+               <div className="max-w-7xl mx-auto h-full flex items-center px-6">
+                   <h1 className="text-3xl font-bold text-white font-display flex items-center gap-3">
+                       <Heart className="w-8 h-8 fill-neon-pink text-neon-pink" />
+                       My Favorites
+                   </h1>
+               </div>
+           </div>
+      )}
 
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-dark-bg -z-10">
           <div className="absolute top-[40%] left-[30%] w-[500px] h-[500px] rounded-full bg-neon-cyan/5 blur-[100px]" />
@@ -390,8 +467,7 @@ const App: React.FC = () => {
         userProfile={currentUserProfile} // Pass current user profile for header avatar
         isReadOnly={isReadOnly}
         onEditProfile={() => setProfileModalOpen(true)}
-        onOpenSearch={() => setSearchModalOpen(true)}
-        onOpenFollowing={() => setFollowingModalOpen(true)}
+        onOpenCommunity={() => setCommunityModalOpen(true)}
       />
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-[-20px]">
@@ -403,7 +479,7 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {showSharedBanner && (
+        {showSharedBanner && selectedCategory !== 'Favorites' && (
             <div className="mb-6 bg-brand-accent/10 border border-brand-accent/30 p-4 rounded-xl flex items-center gap-3 text-brand-accent text-sm">
                 <AlertTriangle className="w-5 h-5" />
                 <span>Viewing Shared Profile. Read-only mode active.</span>
@@ -418,7 +494,7 @@ const App: React.FC = () => {
         />
 
         {loadingPrompts ? (
-             <div className="text-center py-20 text-gray-500 animate-pulse">Syncing...</div>
+             <div className="text-center py-20 text-gray-500 animate-pulse">Loading Dumps...</div>
         ) : filteredPrompts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="bg-dark-card border border-dark-border p-6 rounded-full shadow-lg mb-6">
@@ -428,7 +504,11 @@ const App: React.FC = () => {
               Empty Dump
             </h3>
             <p className="text-gray-500 max-w-md mx-auto">
-              {isReadOnly ? "This user hasn't dumped anything yet." : "No prompts here yet. Dump your first one!"}
+              {selectedCategory === 'Favorites' 
+                ? "You haven't liked any prompts yet." 
+                : isReadOnly 
+                    ? "This user hasn't dumped anything yet." 
+                    : "No prompts here yet. Dump your first one!"}
             </p>
           </div>
         ) : (
@@ -439,6 +519,8 @@ const App: React.FC = () => {
                     prompt={prompt} 
                     onDelete={() => {}} 
                     onEdit={() => {}} 
+                    isLiked={currentUserProfile?.likedPrompts?.includes(prompt.id)}
+                    onLike={handleLikeToggle}
                 />
               </div>
             ))}
@@ -461,6 +543,8 @@ const App: React.FC = () => {
             onDelete={handleDeletePrompt}
             onEdit={openEdit}
             isReadOnly={isReadOnly}
+            isLiked={currentUserProfile?.likedPrompts?.includes(selectedPrompt.id)}
+            onLike={handleLikeToggle}
         />
       )}
 
@@ -474,15 +558,10 @@ const App: React.FC = () => {
         />
       )}
 
-      <UserSearchModal 
-        isOpen={searchModalOpen}
-        onClose={() => setSearchModalOpen(false)}
-      />
-      
       {currentUserProfile && (
-          <FollowingModal
-             isOpen={followingModalOpen}
-             onClose={() => setFollowingModalOpen(false)}
+          <CommunityModal
+             isOpen={communityModalOpen}
+             onClose={() => setCommunityModalOpen(false)}
              followingIds={currentUserProfile.following || []}
           />
       )}

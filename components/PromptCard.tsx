@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Copy, Hash, Image as ImageIcon } from 'lucide-react';
+import { Copy, Hash, Image as ImageIcon, Heart } from 'lucide-react';
 import { PromptEntry } from '../types';
 import { getCategoryColor } from '../constants';
 
@@ -8,9 +8,11 @@ interface PromptCardProps {
   prompt: PromptEntry;
   onDelete: (id: string) => void;
   onEdit: (prompt: PromptEntry) => void;
+  isLiked?: boolean;
+  onLike?: (id: string) => void;
 }
 
-export const PromptCard: React.FC<PromptCardProps> = ({ prompt }) => {
+export const PromptCard: React.FC<PromptCardProps> = ({ prompt, isLiked, onLike }) => {
   const [imageError, setImageError] = useState(false);
   
   const categoryColor = getCategoryColor(prompt.category);
@@ -18,6 +20,21 @@ export const PromptCard: React.FC<PromptCardProps> = ({ prompt }) => {
   return (
     <div className="bg-dark-card rounded-3xl overflow-hidden shadow-lg border border-dark-border hover:border-brand-accent/50 hover:shadow-[0_0_30px_rgba(139,92,246,0.1)] transition-all duration-300 group flex flex-col h-full relative">
       
+      {/* Like Button */}
+      <button 
+        onClick={(e) => {
+            e.stopPropagation();
+            onLike && onLike(prompt.id);
+        }}
+        className={`absolute top-3 right-3 z-10 p-2 rounded-full backdrop-blur-md transition-all ${
+            isLiked 
+            ? 'bg-neon-pink text-white shadow-[0_0_10px_rgba(236,72,153,0.5)]' 
+            : 'bg-black/40 text-white/70 hover:bg-black/60 hover:text-white'
+        }`}
+      >
+        <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+      </button>
+
       {/* Image Preview Area */}
       <div className={`relative w-full h-48 overflow-hidden border-b border-dark-border group-hover:border-brand-accent/20 transition-colors ${!prompt.imageUrl || imageError ? categoryColor.replace('text-', 'text-opacity-20 ').replace('bg-', 'bg-opacity-10 ') : 'bg-black/40'}`}>
           {prompt.imageUrl && !imageError ? (

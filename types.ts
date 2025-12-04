@@ -20,6 +20,7 @@ export interface UserProfile {
   bannerSourceURL?: string;
   bio?: string;
   following?: string[]; // Array of UIDs this user follows
+  likedPrompts?: string[]; // Array of prompt IDs this user likes
 }
 
 export enum Category {

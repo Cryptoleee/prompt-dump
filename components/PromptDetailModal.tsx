@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Copy, ExternalLink, Hash, Edit, Trash2 } from 'lucide-react';
+import { X, Copy, ExternalLink, Hash, Edit, Trash2, Heart } from 'lucide-react';
 import { PromptEntry } from '../types';
 import { getCategoryColor } from '../constants';
 
@@ -11,6 +11,8 @@ interface PromptDetailModalProps {
   onDelete: (id: string) => void;
   onEdit: (prompt: PromptEntry) => void;
   isReadOnly: boolean;
+  isLiked?: boolean;
+  onLike?: (id: string) => void;
 }
 
 export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
@@ -19,7 +21,9 @@ export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
   prompt,
   onDelete,
   onEdit,
-  isReadOnly
+  isReadOnly,
+  isLiked,
+  onLike
 }) => {
   const [copied, setCopied] = React.useState(false);
   const [showFullPrompt, setShowFullPrompt] = React.useState(false);
@@ -55,12 +59,24 @@ export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
                 <div className={`w-full h-full ${categoryColor} opacity-20`} />
             )}
             
-            <button 
-                onClick={onClose}
-                className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-md text-white rounded-full hover:bg-black/70 transition-colors"
-            >
-                <X className="w-5 h-5" />
-            </button>
+            <div className="absolute top-4 right-4 flex gap-2">
+                <button 
+                    onClick={() => onLike && onLike(prompt.id)}
+                    className={`p-2 rounded-full backdrop-blur-md transition-all ${
+                        isLiked 
+                        ? 'bg-neon-pink text-white shadow-[0_0_10px_rgba(236,72,153,0.5)]' 
+                        : 'bg-black/50 text-white hover:bg-black/70'
+                    }`}
+                >
+                    <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
+                </button>
+                <button 
+                    onClick={onClose}
+                    className="p-2 bg-black/50 backdrop-blur-md text-white rounded-full hover:bg-black/70 transition-colors"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+            </div>
 
             <div className="absolute bottom-4 left-4 flex gap-2">
                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border backdrop-blur-md shadow-sm ${categoryColor} bg-black/50 border-white/10`}>

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Sparkles, Plus, LogOut, Link as LinkIcon, Users, Edit, Heart } from 'lucide-react';
+import { Sparkles, Plus, LogOut, Link as LinkIcon, Users, Edit } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { signInWithPopup } from 'firebase/auth';
@@ -14,8 +14,7 @@ interface HeaderProps {
   userProfile?: UserProfile;
   isReadOnly: boolean;
   onEditProfile: () => void;
-  onOpenSearch: () => void;
-  onOpenFollowing: () => void;
+  onOpenCommunity: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -25,8 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
     userProfile, 
     isReadOnly,
     onEditProfile,
-    onOpenSearch,
-    onOpenFollowing
+    onOpenCommunity
 }) => {
   
   const handleShare = () => {
@@ -60,23 +58,14 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center gap-2 sm:gap-4">
           <button 
-             onClick={onOpenSearch}
-             className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-full"
-             title="Find People"
+             onClick={onOpenCommunity}
+             className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-full flex items-center gap-2 px-3"
+             title="Community"
           >
              <Users className="w-5 h-5" />
+             <span className="hidden sm:inline text-sm font-medium">Community</span>
           </button>
           
-          {!isGuest && !isReadOnly && (
-             <button 
-                onClick={onOpenFollowing}
-                className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-full"
-                title="Following"
-             >
-                <Heart className="w-5 h-5" />
-             </button>
-          )}
-
           {(user || isGuest) && (
             <div className="flex items-center gap-2 sm:gap-3 mr-2">
                 {userProfile?.photoURL ? (
@@ -100,9 +89,12 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
                 
                 {isGuest && (
-                    <button onClick={handleGuestLogin} className="hidden sm:flex text-xs font-bold text-white hover:text-brand-accent transition-colors">
-                        Sign In
-                    </button>
+                    <div className="hidden sm:flex flex-col items-start leading-tight">
+                        <button onClick={handleGuestLogin} className="text-xs font-bold text-white hover:text-brand-accent transition-colors">
+                            Sign In
+                        </button>
+                        <span className="text-[10px] text-gray-500">Guest</span>
+                    </div>
                 )}
 
                 {!isGuest && !isReadOnly && (

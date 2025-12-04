@@ -1,12 +1,13 @@
+
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search, Heart } from 'lucide-react';
 import { Category } from '../types';
 
 interface FilterBarProps {
   search: string;
   onSearchChange: (val: string) => void;
-  selectedCategory: Category | 'All';
-  onCategoryChange: (cat: Category | 'All') => void;
+  selectedCategory: Category | 'All' | 'Favorites';
+  onCategoryChange: (cat: Category | 'All' | 'Favorites') => void;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -41,6 +42,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         >
           All
         </button>
+
+        <button
+          onClick={() => onCategoryChange('Favorites')}
+          className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border flex items-center gap-2 ${
+            selectedCategory === 'Favorites'
+              ? 'bg-neon-pink/20 text-neon-pink border-neon-pink shadow-[0_0_15px_rgba(236,72,153,0.2)]'
+              : 'bg-dark-card text-gray-400 border-dark-border hover:border-gray-600 hover:text-white'
+          }`}
+        >
+          <Heart className={`w-3.5 h-3.5 ${selectedCategory === 'Favorites' ? 'fill-neon-pink' : ''}`} />
+          Favorites
+        </button>
+
         {Object.values(Category).map((cat) => (
           <button
             key={cat}
