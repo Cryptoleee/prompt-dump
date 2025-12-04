@@ -1,3 +1,4 @@
+
 import { PromptEntry, Category, GUEST_USER_ID } from './types';
 
 export const GUEST_STORAGE_KEY = 'prompt_dump_guest_data_v1';
@@ -17,7 +18,7 @@ export const INITIAL_PROMPTS: PromptEntry[] = [
   }
 ];
 
-export const CATEGORY_COLORS: Record<Category, string> = {
+export const CATEGORY_COLORS: Record<string, string> = {
   [Category.PHOTOREALISTIC]: 'bg-blue-900/30 text-blue-300 border-blue-800',
   [Category.ILLUSTRATION]: 'bg-pink-900/30 text-pink-300 border-pink-800',
   [Category.THREE_D]: 'bg-purple-900/30 text-purple-300 border-purple-800',
@@ -25,4 +26,9 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   [Category.PAINTING]: 'bg-orange-900/30 text-orange-300 border-orange-800',
   [Category.OTHER]: 'bg-gray-800 text-gray-300 border-gray-700',
   [Category.UNSORTED]: 'bg-slate-800 text-slate-300 border-slate-700',
+};
+
+// Helper to get color safely, falling back to 'Other' for custom categories
+export const getCategoryColor = (cat: string): string => {
+  return CATEGORY_COLORS[cat] || CATEGORY_COLORS[Category.OTHER];
 };

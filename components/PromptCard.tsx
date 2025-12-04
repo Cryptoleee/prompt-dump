@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { Copy, Hash, Image as ImageIcon } from 'lucide-react';
 import { PromptEntry } from '../types';
-import { CATEGORY_COLORS } from '../constants';
+import { getCategoryColor } from '../constants';
 
 interface PromptCardProps {
   prompt: PromptEntry;
@@ -11,12 +12,14 @@ interface PromptCardProps {
 
 export const PromptCard: React.FC<PromptCardProps> = ({ prompt }) => {
   const [imageError, setImageError] = useState(false);
+  
+  const categoryColor = getCategoryColor(prompt.category);
 
   return (
     <div className="bg-dark-card rounded-3xl overflow-hidden shadow-lg border border-dark-border hover:border-brand-accent/50 hover:shadow-[0_0_30px_rgba(139,92,246,0.1)] transition-all duration-300 group flex flex-col h-full relative">
       
       {/* Image Preview Area */}
-      <div className={`relative w-full h-48 overflow-hidden border-b border-dark-border group-hover:border-brand-accent/20 transition-colors ${!prompt.imageUrl || imageError ? CATEGORY_COLORS[prompt.category].replace('text-', 'text-opacity-20 ').replace('bg-', 'bg-opacity-10 ') : 'bg-black/40'}`}>
+      <div className={`relative w-full h-48 overflow-hidden border-b border-dark-border group-hover:border-brand-accent/20 transition-colors ${!prompt.imageUrl || imageError ? categoryColor.replace('text-', 'text-opacity-20 ').replace('bg-', 'bg-opacity-10 ') : 'bg-black/40'}`}>
           {prompt.imageUrl && !imageError ? (
               <img 
                 src={prompt.imageUrl} 
@@ -31,7 +34,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({ prompt }) => {
              </div>
           )}
           
-          {/* Hover Overlay Hint */}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
              <span className="px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-medium text-white border border-white/20">
                 Click to View
@@ -39,7 +41,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({ prompt }) => {
           </div>
 
           <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end pointer-events-none">
-             <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border backdrop-blur-md shadow-sm ${CATEGORY_COLORS[prompt.category]}`}>
+             <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border backdrop-blur-md shadow-sm ${categoryColor}`}>
                 {prompt.category}
              </span>
              {prompt.mood && (
@@ -52,7 +54,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({ prompt }) => {
 
       <div className="p-6 flex flex-col flex-grow">
         <div className="flex-grow mb-4">
-            {/* Fixed line clamp, removed hover expansion */}
             <p className="text-gray-300 font-sans text-base leading-relaxed line-clamp-3">
             {prompt.text}
             </p>

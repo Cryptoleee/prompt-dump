@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Link as LinkIcon, Type, Image as ImageIcon, Tag, Smile, Upload, Loader2 } from 'lucide-react';
 import { Category, PromptEntry } from '../types';
@@ -11,7 +12,7 @@ interface AddPromptFormProps {
     text: string,
     sourceUrl: string,
     imageUrl: string,
-    analysis: { tags: string[]; category: Category; mood: string }
+    analysis: { tags: string[]; category: string; mood: string }
   ) => void;
   initialData?: PromptEntry;
 }
@@ -27,7 +28,8 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
   const [imageUrl, setImageUrl] = useState('');
   
   // Manual Metadata State
-  const [selectedCategory, setSelectedCategory] = useState<Category>(Category.PHOTOREALISTIC);
+  const [selectedCategory, setSelectedCategory] = useState<string>(Category.PHOTOREALISTIC);
+  const [customCategory, setCustomCategory] = useState('');
   const [mood, setMood] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   
@@ -40,7 +42,17 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
         setText(initialData.text);
         setSourceUrl(initialData.sourceUrl);
         setImageUrl(initialData.imageUrl || '');
-        setSelectedCategory(initialData.category);
+        
+        // Check if category is standard or custom
+        const isStandard = Object.values(Category).includes(initialData.category as Category);
+        if (isStandard) {
+            setSelectedCategory(initialData.category);
+            setCustomCategory('');
+        } else {
+            setSelectedCategory(Category.OTHER);
+            setCustomCategory(initialData.category);
+        }
+        
         setMood(initialData.mood || '');
         setTagsInput(initialData.tags.join(', '));
       } else {
@@ -48,6 +60,7 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
         setSourceUrl('');
         setImageUrl('');
         setSelectedCategory(Category.PHOTOREALISTIC);
+        setCustomCategory('');
         setMood('');
         setTagsInput('');
       }
@@ -67,10 +80,16 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
 
     // Parse comma separated tags
     const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    
+    // Determine final category
+    let finalCategory = selectedCategory;
+    if (selectedCategory === Category.OTHER && customCategory.trim()) {
+        finalCategory = customCategory.trim();
+    }
 
     onSubmit(text, sourceUrl, imageUrl, {
       tags,
-      category: selectedCategory,
+      category: finalCategory,
       mood: mood || 'Neutral'
     });
     
@@ -230,7 +249,7 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
                     <label className="block text-sm font-semibold text-gray-400 ml-1">Category</label>
                     <select 
                         value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value as Category)}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
                         className="block w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-2xl text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent appearance-none"
                     >
                         {Object.values(Category).map((cat) => (
@@ -256,6 +275,20 @@ export const AddPromptForm: React.FC<AddPromptFormProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Custom Category Input (Only shows if 'Other' is selected) */}
+            {selectedCategory === Category.OTHER && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                    <label className="block text-sm font-semibold text-brand-accent ml-1">Custom Category Name</label>
+                    <input
+                        type="text"
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                        className="block w-full px-4 py-3 bg-dark-bg border border-brand-accent/50 rounded-2xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-accent focus:border-transparent"
+                        placeholder="e.g. Midjourney V6, Logo Design..."
+                    />
+                </div>
+            )}
 
              {/* Tags Input */}
              <div className="space-y-2">

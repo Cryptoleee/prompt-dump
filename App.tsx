@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
@@ -7,9 +8,10 @@ import { LoginScreen } from './components/LoginScreen';
 import { PromptDetailModal } from './components/PromptDetailModal';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { UserSearchModal } from './components/UserSearchModal';
+import { FollowingModal } from './components/FollowingModal';
 import { PromptEntry, Category, UserProfile, GUEST_USER_ID } from './types';
 import { GUEST_STORAGE_KEY, DEFAULT_BANNER } from './constants';
-import { Layers, Ghost, AlertTriangle } from 'lucide-react';
+import { Layers, Ghost, AlertTriangle, UserPlus, UserCheck } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
@@ -22,7 +24,9 @@ import {
   doc, 
   updateDoc,
   getDoc,
-  setDoc
+  setDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 
 const App: React.FC = () => {
@@ -39,15 +43,17 @@ const App: React.FC = () => {
   // Profile State
   const [viewingUid, setViewingUid] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | undefined>(undefined);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | undefined>(undefined);
   
   // UI State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [followingModalOpen, setFollowingModalOpen] = useState(false);
   
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string | 'All'>('All');
   
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | undefined>(undefined);
   const [selectedPrompt, setSelectedPrompt] = useState<PromptEntry | undefined>(undefined);
@@ -73,8 +79,21 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [viewingUid]);
 
-  // 3. Fetch User Profile (Banner/Username)
+  // 3. Fetch User Profile
   useEffect(() => {
+    // A. Fetch Current User Profile (for Following list etc)
+    if (user && !isGuest) {
+        const fetchCurrentUser = async () => {
+            const docRef = doc(db, 'users', user.uid);
+            const snap = await getDoc(docRef);
+            if(snap.exists()) {
+                setCurrentUserProfile(snap.data() as UserProfile);
+            }
+        };
+        fetchCurrentUser();
+    }
+
+    // B. Fetch Viewing Profile (The banner/prompts we see)
     if (!viewingUid || isGuest) {
         if (isGuest) {
             setUserProfile({
@@ -96,7 +115,7 @@ const App: React.FC = () => {
                 const data = docSnap.data() as UserProfile;
                 setUserProfile(data);
                 
-                // FORCE ONBOARDING: If this is the logged-in user and they don't have a username yet
+                // FORCE ONBOARDING
                 if (user && user.uid === viewingUid && !data.username) {
                     setIsOnboarding(true);
                     setProfileModalOpen(true);
@@ -108,7 +127,8 @@ const App: React.FC = () => {
                     displayName: 'Anonymous', 
                     username: '', // Empty triggers onboarding
                     photoURL: user.photoURL || '',
-                    bannerURL: DEFAULT_BANNER
+                    bannerURL: DEFAULT_BANNER,
+                    following: []
                 };
                 setUserProfile(newProfile);
                 setIsOnboarding(true);
@@ -132,7 +152,6 @@ const App: React.FC = () => {
 
   // 4. Data Sync Listener
   useEffect(() => {
-    // A. Guest Mode: Load from LocalStorage
     if (isGuest) {
       const stored = localStorage.getItem(GUEST_STORAGE_KEY);
       if (stored) {
@@ -142,7 +161,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // B. Cloud Mode: Load from Firestore
     if (!viewingUid) return;
 
     setLoadingPrompts(true);
@@ -175,7 +193,7 @@ const App: React.FC = () => {
     text: string,
     sourceUrl: string,
     imageUrl: string,
-    analysis: { tags: string[]; category: Category; mood: string }
+    analysis: { tags: string[]; category: string; mood: string }
   ) => {
     const newEntry = {
         text,
@@ -189,7 +207,6 @@ const App: React.FC = () => {
     };
 
     if (isGuest) {
-        // Local Save
         const newPrompts = editingPrompt 
             ? prompts.map(p => p.id === editingPrompt.id ? { ...newEntry, id: p.id } : p)
             : [{ ...newEntry, id: Date.now().toString() }, ...prompts];
@@ -197,7 +214,6 @@ const App: React.FC = () => {
         setPrompts(newPrompts);
         localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(newPrompts));
     } else if (user) {
-        // Cloud Save
         try {
             if (editingPrompt) {
                 const promptRef = doc(db, 'prompts', editingPrompt.id);
@@ -232,20 +248,42 @@ const App: React.FC = () => {
   const handleUpdateProfile = async (username: string, bannerUrl: string, avatarUrl: string, displayName: string, bannerSourceUrl: string) => {
     if (!user) return;
     try {
-        const newData: UserProfile = {
-            uid: user.uid,
-            displayName: displayName, // Set to username for anonymity
+        const newData: Partial<UserProfile> = {
+            displayName: displayName,
             username,
             bannerURL: bannerUrl,
             bannerSourceURL: bannerSourceUrl,
             photoURL: avatarUrl
         };
         await setDoc(doc(db, 'users', user.uid), newData, { merge: true });
-        setUserProfile(prev => ({ ...prev, ...newData }));
+        setUserProfile(prev => prev ? ({ ...prev, ...newData } as UserProfile) : undefined);
         setIsOnboarding(false);
     } catch (e) {
         console.error(e);
         alert("Failed to update profile");
+    }
+  };
+  
+  const handleFollowToggle = async () => {
+    if (!user || !viewingUid || user.uid === viewingUid) return;
+    
+    try {
+        const userRef = doc(db, 'users', user.uid);
+        const isFollowing = currentUserProfile?.following?.includes(viewingUid);
+        
+        if (isFollowing) {
+            await updateDoc(userRef, {
+                following: arrayRemove(viewingUid)
+            });
+            setCurrentUserProfile(prev => prev ? ({ ...prev, following: prev.following?.filter(id => id !== viewingUid) }) : undefined);
+        } else {
+            await updateDoc(userRef, {
+                following: arrayUnion(viewingUid)
+            });
+            setCurrentUserProfile(prev => prev ? ({ ...prev, following: [...(prev.following || []), viewingUid] }) : undefined);
+        }
+    } catch (e) {
+        console.error("Follow error", e);
     }
   };
 
@@ -267,7 +305,6 @@ const App: React.FC = () => {
     return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-brand-accent animate-pulse">Loading Dump...</div>;
   }
 
-  // Not Logged In & Not Guest & Not Viewing -> Login Screen
   if (!user && !isGuest && !viewingUid) {
     return <LoginScreen onGuestLogin={() => setIsGuest(true)} />;
   }
@@ -275,8 +312,8 @@ const App: React.FC = () => {
   const isReadOnly = !isGuest && user?.uid !== viewingUid;
   const showGuestBanner = isGuest;
   const showSharedBanner = isReadOnly && userProfile;
+  const isFollowing = currentUserProfile?.following?.includes(viewingUid || '');
 
-  // Filtering
   const filteredPrompts = prompts.filter((p) => {
     const matchesSearch =
       p.text.toLowerCase().includes(search.toLowerCase()) ||
@@ -290,24 +327,54 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-20 font-sans text-gray-200">
       
       {/* Dynamic Profile Banner */}
-      <div className="relative h-64 w-full overflow-hidden">
+      <div className="relative h-64 w-full overflow-hidden group">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark-bg z-10" />
         <img 
             src={userProfile?.bannerURL || DEFAULT_BANNER} 
             className="w-full h-full object-cover opacity-60"
             alt="Banner"
         />
-        <div className="absolute bottom-0 left-0 w-full z-20 p-6 flex items-end">
-             <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-end gap-4">
-                <img 
-                    src={userProfile?.photoURL || (user?.photoURL) || `https://ui-avatars.com/api/?name=${userProfile?.username || 'user'}`} 
-                    className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl object-cover"
-                />
-                <div className="mb-2">
-                    <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
-                        {userProfile?.username ? `@${userProfile.username}` : (isOnboarding ? 'Welcome' : '@anonymous')}
-                    </h1>
+        <div className="absolute bottom-0 left-0 w-full z-20 p-6 flex items-end justify-between">
+             <div className="max-w-7xl mx-auto w-full flex items-end justify-between gap-4">
+                <div className="flex items-end gap-4">
+                    <img 
+                        src={userProfile?.photoURL || (user?.photoURL) || `https://ui-avatars.com/api/?name=${userProfile?.username || 'user'}`} 
+                        className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl object-cover"
+                    />
+                    <div className="mb-2">
+                        <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
+                            {userProfile?.username ? `@${userProfile.username}` : (isOnboarding ? 'Welcome' : '@anonymous')}
+                        </h1>
+                        <div className="flex gap-4 mt-1 text-sm text-gray-400 font-medium">
+                            <span>{prompts.length} Dumps</span>
+                            {/* Simple follower count visualization if available in future */}
+                        </div>
+                    </div>
                 </div>
+                
+                {/* Follow Button */}
+                {isReadOnly && user && !isGuest && (
+                    <button 
+                        onClick={handleFollowToggle}
+                        className={`mb-3 px-5 py-2 rounded-full font-bold flex items-center gap-2 transition-all ${
+                            isFollowing 
+                            ? 'bg-white/10 text-white hover:bg-red-500/20 hover:text-red-400 border border-white/10' 
+                            : 'bg-brand-accent text-white hover:bg-brand-accent/90 shadow-lg'
+                        }`}
+                    >
+                        {isFollowing ? (
+                            <>
+                                <UserCheck className="w-4 h-4" />
+                                Following
+                            </>
+                        ) : (
+                            <>
+                                <UserPlus className="w-4 h-4" />
+                                Follow
+                            </>
+                        )}
+                    </button>
+                )}
              </div>
         </div>
       </div>
@@ -320,15 +387,15 @@ const App: React.FC = () => {
         onAddClick={() => { setEditingPrompt(undefined); setIsModalOpen(true); }} 
         user={user} 
         isGuest={isGuest}
-        userProfile={userProfile}
+        userProfile={currentUserProfile} // Pass current user profile for header avatar
         isReadOnly={isReadOnly}
         onEditProfile={() => setProfileModalOpen(true)}
         onOpenSearch={() => setSearchModalOpen(true)}
+        onOpenFollowing={() => setFollowingModalOpen(true)}
       />
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-[-20px]">
         
-        {/* Guest Warning */}
         {showGuestBanner && (
             <div className="mb-6 bg-yellow-900/20 border border-yellow-700/50 p-4 rounded-xl flex items-center gap-3 text-yellow-200/80 text-sm">
                 <Ghost className="w-5 h-5" />
@@ -336,7 +403,6 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {/* Read Only Warning */}
         {showSharedBanner && (
             <div className="mb-6 bg-brand-accent/10 border border-brand-accent/30 p-4 rounded-xl flex items-center gap-3 text-brand-accent text-sm">
                 <AlertTriangle className="w-5 h-5" />
@@ -398,12 +464,12 @@ const App: React.FC = () => {
         />
       )}
 
-      {userProfile && (
+      {currentUserProfile && (
         <ProfileEditModal
             isOpen={profileModalOpen}
             onClose={() => !isOnboarding && setProfileModalOpen(false)}
             onSave={handleUpdateProfile}
-            currentProfile={userProfile}
+            currentProfile={currentUserProfile}
             isOnboarding={isOnboarding}
         />
       )}
@@ -412,6 +478,14 @@ const App: React.FC = () => {
         isOpen={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
       />
+      
+      {currentUserProfile && (
+          <FollowingModal
+             isOpen={followingModalOpen}
+             onClose={() => setFollowingModalOpen(false)}
+             followingIds={currentUserProfile.following || []}
+          />
+      )}
 
     </div>
   );

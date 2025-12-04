@@ -1,10 +1,11 @@
+
 export interface PromptEntry {
   id: string;
   text: string;
   sourceUrl: string;
   imageUrl?: string;
   tags: string[];
-  category: Category;
+  category: string; // Changed from enum to string to support custom categories
   mood?: string;
   createdAt: number;
   userId: string;
@@ -12,12 +13,13 @@ export interface PromptEntry {
 
 export interface UserProfile {
   uid: string;
-  displayName: string; // This is now used as the "Real Name" or "Display Name"
-  username?: string;   // The unique @handle
+  displayName: string;
+  username?: string;
   photoURL?: string;
   bannerURL?: string;
-  bannerSourceURL?: string; // The original uncropped image
+  bannerSourceURL?: string;
   bio?: string;
+  following?: string[]; // Array of UIDs this user follows
 }
 
 export enum Category {
@@ -32,7 +34,7 @@ export enum Category {
 
 export interface AnalysisResult {
   tags: string[];
-  category: Category;
+  category: string;
   mood: string;
 }
 

@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { X, Copy, ExternalLink, Hash, Edit, Trash2 } from 'lucide-react';
 import { PromptEntry } from '../types';
-import { CATEGORY_COLORS } from '../constants';
+import { getCategoryColor } from '../constants';
 
 interface PromptDetailModalProps {
   isOpen: boolean;
@@ -30,6 +31,8 @@ export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  
+  const categoryColor = getCategoryColor(prompt.category);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -49,7 +52,7 @@ export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
                     alt="Result"
                 />
             ) : (
-                <div className={`w-full h-full ${CATEGORY_COLORS[prompt.category]} opacity-20`} />
+                <div className={`w-full h-full ${categoryColor} opacity-20`} />
             )}
             
             <button 
@@ -60,7 +63,7 @@ export const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
             </button>
 
             <div className="absolute bottom-4 left-4 flex gap-2">
-                 <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border backdrop-blur-md shadow-sm ${CATEGORY_COLORS[prompt.category]} bg-black/50 border-white/10`}>
+                 <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border backdrop-blur-md shadow-sm ${categoryColor} bg-black/50 border-white/10`}>
                     {prompt.category}
                  </span>
                  {prompt.mood && (

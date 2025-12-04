@@ -1,7 +1,10 @@
+
 import React from 'react';
-import { Sparkles, Plus, LogOut, Link as LinkIcon, Users, Edit, LogIn } from 'lucide-react';
-import { User, signOut, signInWithPopup } from 'firebase/auth';
+import { Sparkles, Plus, LogOut, Link as LinkIcon, Users, Edit, Heart } from 'lucide-react';
+import { signOut } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
+import { signInWithPopup } from 'firebase/auth';
+import { User } from 'firebase/auth';
 import { UserProfile } from '../types';
 
 interface HeaderProps {
@@ -12,6 +15,7 @@ interface HeaderProps {
   isReadOnly: boolean;
   onEditProfile: () => void;
   onOpenSearch: () => void;
+  onOpenFollowing: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -21,7 +25,8 @@ export const Header: React.FC<HeaderProps> = ({
     userProfile, 
     isReadOnly,
     onEditProfile,
-    onOpenSearch
+    onOpenSearch,
+    onOpenFollowing
 }) => {
   
   const handleShare = () => {
@@ -33,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   const handleGuestLogin = async () => {
      try {
         await signInWithPopup(auth, googleProvider);
-        window.location.reload(); // Refresh to clear guest state
+        window.location.reload(); 
      } catch (e) {
         console.error(e);
      }
@@ -62,10 +67,19 @@ export const Header: React.FC<HeaderProps> = ({
           >
              <Users className="w-5 h-5" />
           </button>
+          
+          {!isGuest && !isReadOnly && (
+             <button 
+                onClick={onOpenFollowing}
+                className="p-2 text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-full"
+                title="Following"
+             >
+                <Heart className="w-5 h-5" />
+             </button>
+          )}
 
           {(user || isGuest) && (
             <div className="flex items-center gap-2 sm:gap-3 mr-2">
-                {/* Avatar - Clickable for Guests */}
                 {userProfile?.photoURL ? (
                     <img 
                       src={userProfile.photoURL} 
@@ -86,7 +100,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                 )}
 
-                {/* Profile Actions */}
                 {!isGuest && !isReadOnly && (
                     <>
                     <button onClick={onEditProfile} className="p-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full" title="Edit Profile">
@@ -101,7 +114,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </>
                 )}
 
-                {/* Guest Actions - Explicit Text Button for clarity on desktop */}
                 {isGuest && (
                     <button onClick={handleGuestLogin} className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-brand-accent bg-brand-accent/10 hover:bg-brand-accent hover:text-white rounded-lg transition-colors ml-1">
                         Sign In
