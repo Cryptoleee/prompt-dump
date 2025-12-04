@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { X, Save, Upload, Loader2, Image as ImageIcon, AtSign } from 'lucide-react';
+import { X, Save, Loader2, Image as ImageIcon, AtSign, User } from 'lucide-react';
 import { UserProfile } from '../types';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
@@ -8,7 +7,7 @@ import { storage } from '../firebase';
 interface ProfileEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (username: string, bannerUrl: string, avatarUrl: string) => Promise<void>;
+  onSave: (username: string, bannerUrl: string, avatarUrl: string, displayName: string) => Promise<void>;
   currentProfile: UserProfile;
 }
 
@@ -61,6 +60,7 @@ const resizeImage = (file: File): Promise<Blob> => {
 
 export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onClose, onSave, currentProfile }) => {
   const [username, setUsername] = useState(currentProfile.username || '');
+  const [displayName, setDisplayName] = useState(currentProfile.displayName || '');
   const [bannerUrl, setBannerUrl] = useState(currentProfile.bannerURL || '');
   const [avatarUrl, setAvatarUrl] = useState(currentProfile.photoURL || '');
   const [isUploading, setIsUploading] = useState(false);
@@ -83,7 +83,6 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onCl
          setUploadStatus('Optimizing image...');
          try {
             uploadData = await resizeImage(file);
-            console.log(`Resized banner from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(uploadData.size / 1024 / 1024).toFixed(2)}MB`);
          } catch (err) {
             console.warn('Resize failed, attempting original upload', err);
          }
@@ -110,14 +109,14 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onCl
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSave(username, bannerUrl, avatarUrl);
+    await onSave(username, bannerUrl, avatarUrl, displayName);
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-dark-card border border-dark-border rounded-3xl shadow-2xl p-6">
+      <div className="relative w-full max-w-md bg-dark-card border border-dark-border rounded-3xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto no-scrollbar">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-white">Edit Profile</h2>
           <button onClick={onClose} className="p-2 bg-white/5 rounded-full hover:bg-white/10">
@@ -153,9 +152,27 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
+          {/* Display Name */}
+          <div className="space-y-2">
+            <label className="text-sm text-gray-400 font-medium">Display Name (Nickname)</label>
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-4 w-4 text-gray-500" />
+                </div>
+                <input 
+                    type="text" 
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full bg-dark-bg border border-dark-border rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-accent outline-none"
+                    placeholder="Your Name"
+                    maxLength={30}
+                />
+            </div>
+          </div>
+
           {/* Username */}
           <div className="space-y-2">
-            <label className="text-sm text-gray-400 font-medium">Username</label>
+            <label className="text-sm text-gray-400 font-medium">Username (Unique ID)</label>
             <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <AtSign className="h-4 w-4 text-gray-500" />

@@ -215,12 +215,12 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateProfile = async (username: string, bannerUrl: string, avatarUrl: string) => {
+  const handleUpdateProfile = async (username: string, bannerUrl: string, avatarUrl: string, displayName: string) => {
     if (!user) return;
     try {
         const newData: UserProfile = {
             uid: user.uid,
-            displayName: user.displayName || 'User',
+            displayName: displayName || user.displayName || 'User',
             username,
             bannerURL: bannerUrl,
             photoURL: avatarUrl
@@ -251,7 +251,7 @@ const App: React.FC = () => {
     return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-brand-accent animate-pulse">Loading Dump...</div>;
   }
 
-  // Not Logged In & Not Guest -> Login Screen
+  // Not Logged In & Not Guest & Not Viewing -> Login Screen
   if (!user && !isGuest && !viewingUid) {
     return <LoginScreen onGuestLogin={() => setIsGuest(true)} />;
   }
@@ -288,11 +288,22 @@ const App: React.FC = () => {
                     className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl"
                 />
                 <div className="mb-2">
-                    <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
-                        {userProfile?.displayName}
-                    </h1>
-                    {userProfile?.username && (
-                        <p className="text-brand-accent font-medium">@{userProfile.username}</p>
+                    {/* Anonymity Logic: Show Username first if available */}
+                    {userProfile?.username ? (
+                        <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
+                            @{userProfile.username}
+                        </h1>
+                    ) : (
+                        <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
+                             {userProfile?.displayName}
+                        </h1>
+                    )}
+                    
+                    {/* Secondary Text */}
+                    {userProfile?.username && userProfile?.displayName && (
+                        <p className="text-gray-400 font-medium text-sm mt-1 opacity-70">
+                            {userProfile.displayName}
+                        </p>
                     )}
                 </div>
              </div>
@@ -358,7 +369,7 @@ const App: React.FC = () => {
               <div key={prompt.id} onClick={() => openDetail(prompt)} className="cursor-pointer h-full">
                 <PromptCard 
                     prompt={prompt} 
-                    onDelete={() => {}} // Disabled on card, moved to modal
+                    onDelete={() => {}} 
                     onEdit={() => {}} 
                 />
               </div>

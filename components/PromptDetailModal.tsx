@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { X, Copy, ExternalLink, Hash, Edit, Trash2 } from 'lucide-react';
 import { PromptEntry } from '../types';

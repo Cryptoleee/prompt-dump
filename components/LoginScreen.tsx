@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Sparkles, ArrowRight, Ghost } from 'lucide-react';
 import { signInWithPopup } from "firebase/auth";
