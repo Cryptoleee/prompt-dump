@@ -25,8 +25,7 @@ import {
   getDoc,
   setDoc,
   arrayUnion,
-  arrayRemove,
-  documentId
+  arrayRemove
 } from 'firebase/firestore';
 
 const App: React.FC = () => {
@@ -157,7 +156,6 @@ const App: React.FC = () => {
       if (stored) {
         const guestPrompts = JSON.parse(stored);
         if (selectedCategory === 'Favorites') {
-           // Mock favorites for guest using local storage if needed, or just show none
            setPrompts([]); 
         } else {
            setPrompts(guestPrompts);
@@ -177,10 +175,8 @@ const App: React.FC = () => {
             return;
         }
 
-        // Fetch liked prompts individually (Firestore 'in' query limit is 10, parallel fetch is safer for unknown sizes)
         const fetchLiked = async () => {
             try {
-                // If the list is huge, we might need a better solution, but for now fetch all
                 const promises = currentUserProfile.likedPrompts!.map(id => getDoc(doc(db, 'prompts', id)));
                 const snaps = await Promise.all(promises);
                 const liked = snaps.filter(s => s.exists()).map(s => ({ id: s.id, ...s.data() } as PromptEntry));
@@ -324,7 +320,7 @@ const App: React.FC = () => {
   };
 
   const handleLikeToggle = async (promptId: string) => {
-      if (!user) return; // Guest likes not fully supported yet in this version, could add local array
+      if (!user) return;
 
       try {
         const userRef = doc(db, 'users', user.uid);
@@ -379,8 +375,6 @@ const App: React.FC = () => {
       p.text.toLowerCase().includes(search.toLowerCase()) ||
       p.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()));
     
-    // Favorites is handled in useEffect, so here we just check if normal categories apply
-    // If selectedCategory is Favorites, prompts array is ALREADY filtered to favorites
     const matchesCategory =
       selectedCategory === 'All' || selectedCategory === 'Favorites' || p.category === selectedCategory;
       
@@ -412,7 +406,6 @@ const App: React.FC = () => {
                             </h1>
                             <div className="flex gap-4 mt-1 text-sm text-gray-400 font-medium">
                                 <span>{prompts.length} Dumps</span>
-                                {/* Simple follower count visualization if available in future */}
                             </div>
                         </div>
                     </div>
@@ -464,7 +457,7 @@ const App: React.FC = () => {
         onAddClick={() => { setEditingPrompt(undefined); setIsModalOpen(true); }} 
         user={user} 
         isGuest={isGuest}
-        userProfile={currentUserProfile} // Pass current user profile for header avatar
+        userProfile={currentUserProfile}
         isReadOnly={isReadOnly}
         onEditProfile={() => setProfileModalOpen(true)}
         onOpenCommunity={() => setCommunityModalOpen(true)}
