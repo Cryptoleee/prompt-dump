@@ -105,7 +105,7 @@ const App: React.FC = () => {
                 // First time user, no profile doc exists
                 const newProfile = {
                     uid: user.uid,
-                    displayName: 'Anonymous', // Default to anonymous
+                    displayName: 'Anonymous', 
                     username: '', // Empty triggers onboarding
                     photoURL: user.photoURL || '',
                     bannerURL: DEFAULT_BANNER
@@ -234,7 +234,7 @@ const App: React.FC = () => {
     try {
         const newData: UserProfile = {
             uid: user.uid,
-            displayName: displayName, // Will be same as username for anonymity
+            displayName: displayName, 
             username,
             bannerURL: bannerUrl,
             photoURL: avatarUrl
@@ -291,8 +291,9 @@ const App: React.FC = () => {
       {/* Dynamic Profile Banner */}
       <div className="relative h-64 w-full overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark-bg z-10" />
+        {/* Banner with cache busting */}
         <img 
-            src={userProfile?.bannerURL || DEFAULT_BANNER} 
+            src={`${userProfile?.bannerURL || DEFAULT_BANNER}?t=${Date.now()}`} 
             className="w-full h-full object-cover opacity-60"
             alt="Banner"
         />
@@ -303,7 +304,7 @@ const App: React.FC = () => {
                     className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl object-cover"
                 />
                 <div className="mb-2">
-                    {/* Anonymity Logic: ONLY show Username. Fallback to 'Anonymous' if loading */}
+                    {/* Anonymity: Only show Username. Hide Real Name. */}
                     <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
                         {userProfile?.username ? `@${userProfile.username}` : (isOnboarding ? 'Welcome' : '@anonymous')}
                     </h1>
