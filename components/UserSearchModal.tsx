@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Search, User } from 'lucide-react';
+import { X, Search } from 'lucide-react';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { UserProfile } from '../types';
@@ -75,13 +75,12 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({ isOpen, onClos
                     className="flex items-center gap-3 p-3 bg-dark-bg/50 rounded-xl hover:bg-dark-bg transition-colors border border-transparent hover:border-brand-accent/30"
                 >
                     <img 
-                        src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
+                        src={user.photoURL || `https://ui-avatars.com/api/?name=${user.username}`} 
                         className="w-10 h-10 rounded-full object-cover"
-                        alt={user.displayName} 
+                        alt="Avatar" 
                     />
                     <div>
-                        <div className="text-white font-medium">{user.displayName}</div>
-                        {user.username && <div className="text-xs text-brand-accent">@{user.username}</div>}
+                        <div className="text-white font-medium">@{user.username}</div>
                     </div>
                 </a>
             ))}

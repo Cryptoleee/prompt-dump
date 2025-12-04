@@ -73,8 +73,8 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-9 h-9 rounded-full border border-white/20 shadow-sm object-cover" 
                     />
                 ) : (
-                    <div className="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold border border-white/10">
-                        {userProfile?.displayName?.charAt(0) || 'G'}
+                    <div className="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold border border-white/10 uppercase">
+                        {userProfile?.username?.charAt(0) || 'G'}
                     </div>
                 )}
 

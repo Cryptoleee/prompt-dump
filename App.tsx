@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isGuest, setIsGuest] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isOnboarding, setIsOnboarding] = useState(false);
   
   // Data State
   const [prompts, setPrompts] = useState<PromptEntry[]>([]);
@@ -78,7 +79,8 @@ const App: React.FC = () => {
         if (isGuest) {
             setUserProfile({
                 uid: 'guest',
-                displayName: 'Guest User',
+                displayName: 'Guest',
+                username: 'guest',
                 bannerURL: DEFAULT_BANNER
             });
         }
@@ -89,22 +91,34 @@ const App: React.FC = () => {
         try {
             const docRef = doc(db, 'users', viewingUid);
             const docSnap = await getDoc(docRef);
+            
             if (docSnap.exists()) {
-                setUserProfile(docSnap.data() as UserProfile);
+                const data = docSnap.data() as UserProfile;
+                setUserProfile(data);
+                
+                // FORCE ONBOARDING: If this is the logged-in user and they don't have a username yet
+                if (user && user.uid === viewingUid && !data.username) {
+                    setIsOnboarding(true);
+                    setProfileModalOpen(true);
+                }
             } else if (user && user.uid === viewingUid) {
-                // Initialize profile if missing
+                // First time user, no profile doc exists
                 const newProfile = {
                     uid: user.uid,
-                    displayName: user.displayName || 'User',
+                    displayName: 'Anonymous', // Default to anonymous
+                    username: '', // Empty triggers onboarding
                     photoURL: user.photoURL || '',
                     bannerURL: DEFAULT_BANNER
                 };
                 setUserProfile(newProfile);
+                setIsOnboarding(true);
+                setProfileModalOpen(true);
             } else {
                 // Viewing unknown user
                 setUserProfile({
                     uid: viewingUid,
-                    displayName: 'Unknown User',
+                    displayName: 'Anonymous User',
+                    username: 'unknown',
                     bannerURL: DEFAULT_BANNER
                 });
             }
@@ -220,13 +234,14 @@ const App: React.FC = () => {
     try {
         const newData: UserProfile = {
             uid: user.uid,
-            displayName: displayName || user.displayName || 'User',
+            displayName: displayName, // Will be same as username for anonymity
             username,
             bannerURL: bannerUrl,
             photoURL: avatarUrl
         };
         await setDoc(doc(db, 'users', user.uid), newData, { merge: true });
         setUserProfile(prev => ({ ...prev, ...newData }));
+        setIsOnboarding(false); // End onboarding if active
     } catch (e) {
         console.error(e);
         alert("Failed to update profile");
@@ -284,27 +299,14 @@ const App: React.FC = () => {
         <div className="absolute bottom-0 left-0 w-full z-20 p-6 flex items-end">
              <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-end gap-4">
                 <img 
-                    src={userProfile?.photoURL || (user?.photoURL) || `https://ui-avatars.com/api/?name=${userProfile?.displayName}`} 
-                    className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl"
+                    src={userProfile?.photoURL || (user?.photoURL) || `https://ui-avatars.com/api/?name=${userProfile?.username || 'user'}`} 
+                    className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl object-cover"
                 />
                 <div className="mb-2">
-                    {/* Anonymity Logic: Show Username first if available */}
-                    {userProfile?.username ? (
-                        <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
-                            @{userProfile.username}
-                        </h1>
-                    ) : (
-                        <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
-                             {userProfile?.displayName}
-                        </h1>
-                    )}
-                    
-                    {/* Secondary Text */}
-                    {userProfile?.username && userProfile?.displayName && (
-                        <p className="text-gray-400 font-medium text-sm mt-1 opacity-70">
-                            {userProfile.displayName}
-                        </p>
-                    )}
+                    {/* Anonymity Logic: ONLY show Username. Fallback to 'Anonymous' if loading */}
+                    <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
+                        {userProfile?.username ? `@${userProfile.username}` : (isOnboarding ? 'Welcome' : '@anonymous')}
+                    </h1>
                 </div>
              </div>
         </div>
@@ -399,9 +401,10 @@ const App: React.FC = () => {
       {userProfile && (
         <ProfileEditModal
             isOpen={profileModalOpen}
-            onClose={() => setProfileModalOpen(false)}
+            onClose={() => !isOnboarding && setProfileModalOpen(false)}
             onSave={handleUpdateProfile}
             currentProfile={userProfile}
+            isOnboarding={isOnboarding}
         />
       )}
 

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Save, Loader2, Image as ImageIcon, AtSign, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Loader2, Image as ImageIcon, AtSign } from 'lucide-react';
 import { UserProfile } from '../types';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
@@ -9,6 +9,7 @@ interface ProfileEditModalProps {
   onClose: () => void;
   onSave: (username: string, bannerUrl: string, avatarUrl: string, displayName: string) => Promise<void>;
   currentProfile: UserProfile;
+  isOnboarding?: boolean;
 }
 
 // Helper to resize images
@@ -58,13 +59,24 @@ const resizeImage = (file: File): Promise<Blob> => {
   });
 };
 
-export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onClose, onSave, currentProfile }) => {
+export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  currentProfile,
+  isOnboarding = false
+}) => {
   const [username, setUsername] = useState(currentProfile.username || '');
-  const [displayName, setDisplayName] = useState(currentProfile.displayName || '');
   const [bannerUrl, setBannerUrl] = useState(currentProfile.bannerURL || '');
   const [avatarUrl, setAvatarUrl] = useState(currentProfile.photoURL || '');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [error, setError] = useState('');
+
+  // Reset error when modal opens
+  useEffect(() => {
+    if (isOpen) setError('');
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -109,19 +121,42 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onCl
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSave(username, bannerUrl, avatarUrl, displayName);
-    onClose();
+    if (!username.trim()) {
+        setError("Username is required.");
+        return;
+    }
+    
+    try {
+        // Enforce anonymity: Display Name is set to Username
+        await onSave(username, bannerUrl, avatarUrl, username);
+        onClose();
+    } catch (err) {
+        console.error(err);
+        setError("Failed to save profile. Please try again.");
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-dark-card border border-dark-border rounded-3xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div 
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+        onClick={() => !isOnboarding && onClose()} 
+      />
+      <div className="relative w-full max-w-md bg-dark-card border border-dark-border rounded-3xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto no-scrollbar animate-in fade-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-white">Edit Profile</h2>
-          <button onClick={onClose} className="p-2 bg-white/5 rounded-full hover:bg-white/10">
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
+          <div>
+            <h2 className="text-xl font-bold text-white">
+                {isOnboarding ? 'Create your Identity' : 'Edit Profile'}
+            </h2>
+            {isOnboarding && (
+                <p className="text-sm text-gray-400 mt-1">Choose a username to stay anonymous.</p>
+            )}
+          </div>
+          {!isOnboarding && (
+            <button onClick={onClose} className="p-2 bg-white/5 rounded-full hover:bg-white/10">
+                <X className="w-5 h-5 text-gray-400" />
+            </button>
+          )}
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
@@ -152,27 +187,33 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
-          {/* Display Name */}
-          <div className="space-y-2">
-            <label className="text-sm text-gray-400 font-medium">Display Name (Nickname)</label>
-            <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-4 w-4 text-gray-500" />
-                </div>
-                <input 
-                    type="text" 
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full bg-dark-bg border border-dark-border rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-accent outline-none"
-                    placeholder="Your Name"
-                    maxLength={30}
-                />
-            </div>
-          </div>
+           {/* Avatar Upload */}
+           <div className="flex items-center gap-4">
+             <div 
+                className="relative w-16 h-16 rounded-full bg-dark-bg border border-dark-border overflow-hidden cursor-pointer group"
+                onClick={() => !isUploading && document.getElementById('avatarInput')?.click()}
+             >
+                 {avatarUrl ? (
+                     <img src={avatarUrl} className="w-full h-full object-cover" alt="Avatar" />
+                 ) : (
+                     <div className="w-full h-full flex items-center justify-center bg-brand-accent/10 text-brand-accent">
+                         <ImageIcon className="w-6 h-6" />
+                     </div>
+                 )}
+                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                     <ImageIcon className="w-4 h-4 text-white" />
+                 </div>
+                 <input type="file" id="avatarInput" className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'avatar')} disabled={isUploading} />
+             </div>
+             <div className="text-sm text-gray-500">
+                 <p className="font-medium text-gray-300">Profile Picture</p>
+                 <p className="text-xs">Tap to change</p>
+             </div>
+           </div>
 
           {/* Username */}
           <div className="space-y-2">
-            <label className="text-sm text-gray-400 font-medium">Username (Unique ID)</label>
+            <label className="text-sm text-gray-400 font-medium">Username (Required)</label>
             <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <AtSign className="h-4 w-4 text-gray-500" />
@@ -184,9 +225,17 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onCl
                     className="w-full bg-dark-bg border border-dark-border rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-accent outline-none"
                     placeholder="username"
                     maxLength={20}
+                    required
                 />
             </div>
+            <p className="text-xs text-gray-600">This will be your unique identity. Real names are hidden.</p>
           </div>
+            
+            {error && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                    {error}
+                </div>
+            )}
 
           <button 
             type="submit" 
@@ -194,7 +243,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ isOpen, onCl
             className="w-full bg-brand-accent text-white font-bold py-3 rounded-xl hover:bg-brand-accent/90 transition-colors flex items-center justify-center gap-2"
           >
             {isUploading ? <Loader2 className="animate-spin" /> : <Save className="w-5 h-5" />}
-            Save Profile
+            {isOnboarding ? 'Start Dumping' : 'Save Profile'}
           </button>
         </form>
       </div>
