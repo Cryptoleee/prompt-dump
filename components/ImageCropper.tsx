@@ -20,6 +20,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ imageSrc, aspectRati
 
   // Load image
   useEffect(() => {
+    imgRef.current.crossOrigin = "anonymous"; // Critical for editing existing Firebase images
     imgRef.current.src = imageSrc;
     imgRef.current.onload = draw;
   }, [imageSrc]);
@@ -107,11 +108,18 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ imageSrc, aspectRati
     const x = (targetWidth - scaledWidth) / 2 + (offset.x * ratio);
     const y = (targetHeight - scaledHeight) / 2 + (offset.y * ratio);
 
-    ctx.drawImage(imgRef.current, x, y, scaledWidth, scaledHeight);
-
-    exportCanvas.toBlob((blob) => {
-      if (blob) onCrop(blob);
-    }, 'image/jpeg', 0.9);
+    try {
+        ctx.drawImage(imgRef.current, x, y, scaledWidth, scaledHeight);
+        
+        exportCanvas.toBlob((blob) => {
+            if (blob) onCrop(blob);
+        }, 'image/jpeg', 0.9);
+    } catch (e) {
+        console.error("Canvas taint error (CORS)", e);
+        // Fallback for tainted canvas (rare if rules are correct)
+        alert("Unable to crop image due to browser security settings.");
+        onCancel();
+    }
   };
 
   return (

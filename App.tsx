@@ -7,7 +7,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { PromptDetailModal } from './components/PromptDetailModal';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { UserSearchModal } from './components/UserSearchModal';
-import { PromptEntry, Category, UserProfile } from './types';
+import { PromptEntry, Category, UserProfile, GUEST_USER_ID } from './types';
 import { GUEST_STORAGE_KEY, DEFAULT_BANNER } from './constants';
 import { Layers, Ghost, AlertTriangle } from 'lucide-react';
 import { auth, db } from './firebase';
@@ -78,7 +78,7 @@ const App: React.FC = () => {
     if (!viewingUid || isGuest) {
         if (isGuest) {
             setUserProfile({
-                uid: 'guest',
+                uid: GUEST_USER_ID,
                 displayName: 'Guest',
                 username: 'guest',
                 bannerURL: DEFAULT_BANNER
@@ -185,7 +185,7 @@ const App: React.FC = () => {
         category: analysis.category,
         mood: analysis.mood,
         createdAt: Date.now(),
-        userId: user?.uid || 'guest'
+        userId: user?.uid || GUEST_USER_ID
     };
 
     if (isGuest) {
@@ -229,23 +229,31 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateProfile = async (username: string, bannerUrl: string, avatarUrl: string, displayName: string) => {
+  const handleUpdateProfile = async (username: string, bannerUrl: string, avatarUrl: string, displayName: string, bannerSourceUrl: string) => {
     if (!user) return;
     try {
         const newData: UserProfile = {
             uid: user.uid,
-            displayName: displayName, 
+            displayName: displayName, // Set to username for anonymity
             username,
             bannerURL: bannerUrl,
+            bannerSourceURL: bannerSourceUrl,
             photoURL: avatarUrl
         };
         await setDoc(doc(db, 'users', user.uid), newData, { merge: true });
         setUserProfile(prev => ({ ...prev, ...newData }));
-        setIsOnboarding(false); // End onboarding if active
+        setIsOnboarding(false);
     } catch (e) {
         console.error(e);
         alert("Failed to update profile");
     }
+  };
+
+  // Helper to append timestamp properly
+  const getCacheBustedUrl = (url?: string) => {
+      if (!url) return DEFAULT_BANNER;
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}t=${Date.now()}`;
   };
 
   // --- Modals ---
@@ -291,9 +299,8 @@ const App: React.FC = () => {
       {/* Dynamic Profile Banner */}
       <div className="relative h-64 w-full overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark-bg z-10" />
-        {/* Banner with cache busting */}
         <img 
-            src={`${userProfile?.bannerURL || DEFAULT_BANNER}?t=${Date.now()}`} 
+            src={getCacheBustedUrl(userProfile?.bannerURL)} 
             className="w-full h-full object-cover opacity-60"
             alt="Banner"
         />
@@ -304,7 +311,6 @@ const App: React.FC = () => {
                     className="w-20 h-20 rounded-full border-4 border-dark-bg shadow-xl object-cover"
                 />
                 <div className="mb-2">
-                    {/* Anonymity: Only show Username. Hide Real Name. */}
                     <h1 className="text-3xl font-bold text-white font-display shadow-black drop-shadow-lg">
                         {userProfile?.username ? `@${userProfile.username}` : (isOnboarding ? 'Welcome' : '@anonymous')}
                     </h1>

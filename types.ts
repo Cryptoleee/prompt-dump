@@ -7,14 +7,16 @@ export interface PromptEntry {
   category: Category;
   mood?: string;
   createdAt: number;
+  userId: string;
 }
 
 export interface UserProfile {
   uid: string;
-  displayName: string;
-  username?: string;
+  displayName: string; // This is now used as the "Real Name" or "Display Name"
+  username?: string;   // The unique @handle
   photoURL?: string;
   bannerURL?: string;
+  bannerSourceURL?: string; // The original uncropped image
   bio?: string;
 }
 
@@ -33,3 +35,5 @@ export interface AnalysisResult {
   category: Category;
   mood: string;
 }
+
+export const GUEST_USER_ID = 'guest';

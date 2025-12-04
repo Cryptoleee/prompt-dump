@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Image as ImageIcon, AtSign } from 'lucide-react';
+import { X, Save, Loader2, Image as ImageIcon, AtSign, Crop } from 'lucide-react';
 import { UserProfile } from '../types';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
@@ -8,7 +8,7 @@ import { ImageCropper } from './ImageCropper';
 interface ProfileEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (username: string, bannerUrl: string, avatarUrl: string, displayName: string) => Promise<void>;
+  onSave: (username: string, bannerUrl: string, avatarUrl: string, displayName: string, bannerSourceUrl: string) => Promise<void>;
   currentProfile: UserProfile;
   isOnboarding?: boolean;
 }
@@ -22,6 +22,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 }) => {
   const [username, setUsername] = useState(currentProfile.username || '');
   const [bannerUrl, setBannerUrl] = useState(currentProfile.bannerURL || '');
+  const [bannerSourceUrl, setBannerSourceUrl] = useState(currentProfile.bannerSourceURL || '');
   const [avatarUrl, setAvatarUrl] = useState(currentProfile.photoURL || '');
   
   const [isUploading, setIsUploading] = useState(false);
@@ -31,6 +32,9 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   // Cropper State
   const [croppingImage, setCroppingImage] = useState<string | null>(null);
   const [cropType, setCropType] = useState<'banner' | 'avatar' | null>(null);
+  
+  // Store the raw file to upload as "Source" later
+  const [currentBannerFile, setCurrentBannerFile] = useState<File | null>(null);
 
   // Reset error when modal opens
   useEffect(() => {
@@ -43,6 +47,10 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (type === 'banner') {
+        setCurrentBannerFile(file);
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
         setCroppingImage(reader.result as string);
@@ -54,6 +62,13 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     e.target.value = '';
   };
 
+  const handleRepositionBanner = () => {
+      if (!bannerSourceUrl) return;
+      setCroppingImage(bannerSourceUrl);
+      setCropType('banner');
+      setCurrentBannerFile(null); // We are using existing source, so no new source upload
+  };
+
   const handleCropComplete = async (blob: Blob) => {
     if (!cropType) return;
     
@@ -62,18 +77,32 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         setIsUploading(true);
         setUploadStatus('Uploading...');
 
-        const path = `users/${currentProfile.uid}/${cropType}_${Date.now()}`;
-        const storageRef = ref(storage, path);
+        const timestamp = Date.now();
+        // 1. Upload the cropped display version
+        const displayPath = `users/${currentProfile.uid}/${cropType}_display_${timestamp}`;
+        const displayRef = ref(storage, displayPath);
+        await uploadBytes(displayRef, blob);
+        const displayUrl = await getDownloadURL(displayRef);
         
-        await uploadBytes(storageRef, blob);
-        const url = await getDownloadURL(storageRef);
-        
-        if (cropType === 'banner') setBannerUrl(url);
-        else setAvatarUrl(url);
+        if (cropType === 'banner') {
+            setBannerUrl(displayUrl);
+
+            // 2. Upload the source version (only if it's a new file upload)
+            if (currentBannerFile) {
+                const sourcePath = `users/${currentProfile.uid}/banner_source_${timestamp}`;
+                const sourceRef = ref(storage, sourcePath);
+                await uploadBytes(sourceRef, currentBannerFile);
+                const sourceUrl = await getDownloadURL(sourceRef);
+                setBannerSourceUrl(sourceUrl);
+                setCurrentBannerFile(null); // Reset
+            }
+        } else {
+            setAvatarUrl(displayUrl);
+        }
         
     } catch (err) {
         console.error(err);
-        alert("Upload failed. Please try again.");
+        alert("Upload failed. Please check your connection or storage permissions.");
     } finally {
         setIsUploading(false);
         setUploadStatus('');
@@ -90,7 +119,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     
     try {
         // Enforce anonymity: Display Name is set to Username
-        await onSave(username, bannerUrl, avatarUrl, username);
+        await onSave(username, bannerUrl, avatarUrl, username, bannerSourceUrl);
         if (!isOnboarding) onClose();
     } catch (err) {
         console.error(err);
@@ -106,7 +135,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                     imageSrc={croppingImage} 
                     aspectRatio={cropType === 'banner' ? 16 / 9 : 1}
                     onCrop={handleCropComplete}
-                    onCancel={() => { setCroppingImage(null); setCropType(null); }}
+                    onCancel={() => { setCroppingImage(null); setCropType(null); setCurrentBannerFile(null); }}
                 />
              </div>
         </div>
@@ -139,22 +168,42 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         <form onSubmit={handleSave} className="space-y-6">
           {/* Banner Upload */}
           <div className="space-y-2">
-            <label className="text-sm text-gray-400 font-medium">Profile Banner</label>
+            <div className="flex justify-between items-center">
+                <label className="text-sm text-gray-400 font-medium">Profile Banner</label>
+                {bannerSourceUrl && !isUploading && (
+                    <button 
+                        type="button"
+                        onClick={handleRepositionBanner}
+                        className="text-xs text-brand-accent hover:text-white flex items-center gap-1"
+                    >
+                        <Crop className="w-3 h-3" />
+                        Reposition
+                    </button>
+                )}
+            </div>
             <div 
-              className="relative h-32 rounded-xl bg-dark-bg border-2 border-dashed border-dark-border flex items-center justify-center overflow-hidden group cursor-pointer"
-              onClick={() => !isUploading && document.getElementById('bannerInput')?.click()}
+              className="relative h-32 rounded-xl bg-dark-bg border-2 border-dashed border-dark-border flex items-center justify-center overflow-hidden group"
             >
               {bannerUrl ? (
-                <img src={bannerUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" alt="Banner" />
+                <img src={bannerUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" alt="Banner" />
               ) : (
-                <div className="text-center p-4">
+                <div className="text-center p-4 pointer-events-none">
                     <ImageIcon className="w-6 h-6 mx-auto text-gray-500 mb-2" />
                     <span className="text-xs text-gray-500">Tap to upload banner</span>
                 </div>
               )}
               
+              <div 
+                className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                onClick={() => !isUploading && document.getElementById('bannerInput')?.click()}
+              >
+                 <div className="bg-black/50 p-2 rounded-full">
+                    <ImageIcon className="w-5 h-5 text-white" />
+                 </div>
+              </div>
+              
               {isUploading && (
-                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-xs text-brand-accent font-medium">
+                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-xs text-brand-accent font-medium z-10">
                       <Loader2 className="w-6 h-6 animate-spin mb-2" />
                       {uploadStatus}
                   </div>

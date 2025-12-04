@@ -1,4 +1,4 @@
-import { PromptEntry, Category } from './types';
+import { PromptEntry, Category, GUEST_USER_ID } from './types';
 
 export const GUEST_STORAGE_KEY = 'prompt_dump_guest_data_v1';
 export const DEFAULT_BANNER = 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2670&auto=format&fit=crop';
@@ -13,6 +13,7 @@ export const INITIAL_PROMPTS: PromptEntry[] = [
     category: Category.THREE_D,
     mood: 'Playful',
     createdAt: Date.now(),
+    userId: GUEST_USER_ID,
   }
 ];
 
