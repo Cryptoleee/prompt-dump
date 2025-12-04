@@ -281,7 +281,7 @@ const App: React.FC = () => {
     if (!user) return;
     try {
         const newData: Partial<UserProfile> = {
-            displayName: displayName,
+            displayName: displayName, // Set to username for anonymity
             username,
             bannerURL: bannerUrl,
             bannerSourceURL: bannerSourceUrl,

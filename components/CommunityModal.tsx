@@ -11,7 +11,7 @@ interface CommunityModalProps {
   followingIds: string[];
 }
 
-// UserListItem moved outside main component
+// UserListItem moved outside main component to prevent re-creation on every render
 const UserListItem: React.FC<{ user: UserProfile; followingIds: string[] }> = ({ user, followingIds }) => (
     <a 
         href={`/?uid=${user.uid}`}
@@ -20,7 +20,7 @@ const UserListItem: React.FC<{ user: UserProfile; followingIds: string[] }> = ({
         <div className="flex items-center gap-3">
             <img 
                 src={user.photoURL || `https://ui-avatars.com/api/?name=${user.username}`} 
-                className="w-10 h-10 rounded-full object-cover"
+                className="w-10 h-10 rounded-full object-cover border border-white/10"
                 alt="Avatar" 
             />
             <div>
